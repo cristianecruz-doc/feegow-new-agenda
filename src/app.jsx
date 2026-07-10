@@ -152,9 +152,33 @@ function App() {
 
   // ---- drag reschedule -----------------------------------------------------
   const [drag, setDrag] = React.useState({ appt: null, colId: null, min: null });
+  const [dropError, setDropError] = React.useState(null); // { pro, kind:'conv'|'proc', value }
+
+  // Coluna de destino é de um profissional? (validação de convênio/serviço só vale p/ médico)
+  function targetProOf(colId) {
+    if (state.view === 'semana') return app.dayPro;
+    if (typeof colId === 'string' && colId.startsWith('pro:')) return colId.split(':')[1];
+    if (typeof colId === 'string' && !colId.includes(':') && PROS.some(p => p.id === colId)) return colId;
+    return null; // equipamento / sala → sem validação de médico
+  }
   function applyDrop(colId, min) {
     const a = drag.appt; if (!a) return;
     const slot = resolveSlot(colId);
+    // ---- validação: o médico de destino atende o convênio e realiza o serviço? ----
+    const tPro = targetProOf(colId);
+    if (tPro && tPro !== a.pro) {
+      const pro = PROS.find(p => p.id === tPro);
+      const date = slot.date || a.date;
+      const conv = a.conv || 'Particular';
+      if (conv !== 'Particular' && !dayAcceptsCond(tPro, date, { conv })) {
+        setDropError({ pro, kind: 'conv', value: conv }); setDrag({ appt: null }); return;
+      }
+      const procIds = (a.procs && a.procs.length) ? a.procs : (a.proc ? [a.proc] : []);
+      const badProc = procIds.find(pid => pid && !dayAcceptsCond(tPro, date, { procId: pid }));
+      if (badProc) {
+        setDropError({ pro, kind: 'proc', value: (PROCS[badProc] || {}).name || 'esse serviço' }); setDrag({ appt: null }); return;
+      }
+    }
     const prev = { ...a };
     setAppts(s => s.map(x => x.id === a.id ? { ...x, pro: slot.proId || x.pro, date: slot.date || x.date, equip: slot.equip || x.equip, room: slot.room || x.room, start: fmtMin(min) } : x));
     setDrag({ appt: null });
@@ -214,6 +238,16 @@ function App() {
         onDelete={b => { setBlocks(s => s.filter(x => x.id !== b.id)); setBlockM(null); flash('Bloqueio excluído · horários liberados', { tone: 'danger' }); }} />}
       {resched && <RescheduleModal a={resched.a} onClose={() => setResched(null)} onConfirm={confirmReschedule} />}
       {blockPick && <BlockChooser blocks={blockPick} onClose={() => setBlockPick(null)} onPick={b => { setBlockPick(null); setBlockM({ block: b }); }} />}
+      {dropError && <CenterModal
+        title={dropError.kind === 'conv' ? 'Convênio não atendido' : 'Serviço não oferecido'}
+        icon="alert-triangle" iconTone="danger" width={430} onClose={() => setDropError(null)}
+        footer={<><span style={{ flex: 1 }} /><WButton variant="primary" label="Entendi" onClick={() => setDropError(null)} /></>}>
+        <div style={{ fontSize: 14, color: WT.fg2, lineHeight: 1.55 }}>
+          {dropError.kind === 'conv'
+            ? <><strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>{dropError.pro.name}</strong> não atende o convênio <strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>{dropError.value}</strong>. Escolha outro profissional ou ajuste o convênio do agendamento.</>
+            : <><strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>{dropError.pro.name}</strong> não realiza <strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>{dropError.value}</strong>. Escolha um profissional que ofereça esse serviço.</>}
+        </div>
+      </CenterModal>}
       <WToast toast={toast} />
 
       <TweaksPanel title="Tweaks">

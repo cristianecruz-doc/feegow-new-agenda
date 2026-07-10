@@ -149,8 +149,8 @@ function BlockCard({ block, top, height, onOpen }) {
   return (
     <button onClick={() => onOpen && onOpen(block)} title={`Bloqueio · ${block.titulo || ''} ${block.start}–${block.end}${rec ? ' · ' + rec : ''}`} style={{
       position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'left',
-      border: '1px solid #c0392b59', borderLeft: '3px solid #c0392b', borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
-      background: '#c0392b24',
+      border: '1px solid #d99b91', borderLeft: '3px solid #c0392b', borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
+      background: '#f6dcd7',
       display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: tall ? 'flex-start' : 'center', justifyContent: 'center', gap: tall ? 1 : 6, padding: tall ? '4px 8px' : '0 8px', fontFamily: WT.font,
     }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>
@@ -172,8 +172,8 @@ function BlockGroupCard({ group, top, height, onOpen }) {
   return (
     <button onClick={onOpen} title={`${n} bloqueios neste horário — clique para escolher qual editar`} style={{
       position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'left',
-      border: '1px solid #c0392b66', borderLeft: '3px solid #c0392b', borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
-      background: '#c0392b24',
+      border: '1px solid #d99b91', borderLeft: '3px solid #c0392b', borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
+      background: '#f6dcd7',
       display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: tall ? 'flex-start' : 'center', justifyContent: 'center', gap: tall ? 2 : 6, padding: tall ? '5px 8px' : '0 8px', fontFamily: WT.font,
     }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>

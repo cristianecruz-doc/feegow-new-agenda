@@ -363,7 +363,7 @@ function agendaSelection(state, set) {
   const remove = res => res.kind === 'pro'
     ? set(s => ({ filters: { ...s.filters, pros: (s.filters.pros == null ? allPros : s.filters.pros).filter(id => id !== res.id) } }))
     : set(s => ({ extraResources: (s.extraResources || []).filter(r => !(r.kind === res.kind && r.id === res.id)) }));
-  return { selected, add, remove, allPros, proIds };
+  return { selected, add, remove, allPros, proIds, date: state.date };
 }
 
 // Dia = multi-resource view (profissionais + equipamentos + salas em colunas)
@@ -378,7 +378,7 @@ function DayView({ state, set, appts, blocks, drag, onSlotClick, onCardOpen, onB
   }).filter(Boolean);
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {state.agendasPlacement !== 'sidebar' && <ResourceBar selected={selected} onAdd={add} onRemove={remove} />}
+      {state.agendasPlacement !== 'sidebar' && <ResourceBar selected={selected} onAdd={add} onRemove={remove} date={state.date} />}
       <div style={{ flex: 1, minHeight: 0 }}>
         {columns.length === 0
           ? <EmptyState icon="layout-grid" title="Nenhuma agenda selecionada" hint="Use “Adicionar agenda” para incluir profissionais, equipamentos ou salas." />
@@ -420,7 +420,7 @@ function WeekView({ state, set, appts, blocks, drag, onSlotClick, onCardOpen, on
         ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 16px', borderBottom: `1px solid ${WT.borderSub}`, background: WT.raised, flex: 'none' }}>
             <WToggle checked={!!state.weekHideWeekend} onChange={v => set({ weekHideWeekend: v })} label="Ocultar fim de semana" />
           </div>
-        : <ResourceBar selected={selected} onAdd={add} onRemove={remove} trailing={
+        : <ResourceBar selected={selected} onAdd={add} onRemove={remove} date={state.date} trailing={
             <WToggle checked={!!state.weekHideWeekend} onChange={v => set({ weekHideWeekend: v })} label="Ocultar fim de semana" />
           } />}
       {columns.length === 0
@@ -454,7 +454,8 @@ function buildResourceColumn(res, appts, blocks, date, conf) {
     occupancy: occupancyOf(ca, conf.startMin, conf.endMin, cb) };
 }
 
-function ResourcePicker({ selected, onToggle, onClose, anchorRect, only }) {
+function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date }) {
+  const forDate = date || TODAY;
   const has = (kind, id) => selected.some(r => r.kind === kind && r.id === id);
   const showPros = !only || only.includes('pro');
   const showEquip = !only || only.includes('equip');
@@ -474,6 +475,14 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only }) {
   const fPros = showPros ? PROS.filter(matchPro) : [];
   const fEquip = showEquip ? EQUIP.filter(e => !ql || [e.name, e.spec].some(s => s && s.toLowerCase().includes(ql))) : [];
   const fRooms = showRooms ? ROOMS.filter(r => !ql || [r.name, r.spec].some(s => s && s.toLowerCase().includes(ql))) : [];
+  // Unidades: adicionar todos os profissionais que trabalham naquela unidade NAQUELE DIA (pelas grades)
+  const prosWorkingInUnit = unit => PROS.filter(p => {
+    const gs = gradesFor(p.id, forDate);
+    if (!gs.length) return false;
+    return gs.some(g => { const ru = g.room ? (ROOMS.find(r => r.name === g.room) || {}).unit : null; return (ru || p.unit) === unit; });
+  });
+  const fUnits = showPros ? UNITS.map(u => ({ id: u, name: u, pros: prosWorkingInUnit(u) }))
+    .filter(u => u.pros.length > 0 && (!ql || u.name.toLowerCase().includes(ql))) : [];
   const found = [...fPros.map(p => ({ kind: 'pro', id: p.id })), ...fEquip.map(e => ({ kind: 'equip', id: e.id })), ...fRooms.map(r => ({ kind: 'room', id: r.id }))];
   const toAdd = found.filter(r => !has(r.kind, r.id));
   const total = fPros.length + fEquip.length + fRooms.length;
@@ -516,9 +525,31 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only }) {
         )}
       </div>
       <div style={{ maxHeight: 380, overflow: 'auto' }}>
-        {total === 0
+        {total === 0 && fUnits.length === 0
           ? <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: WT.muted }}>Nenhuma agenda encontrada para “{q}”.</div>
           : <>
+              {fUnits.length > 0 && (
+                <div style={{ padding: '6px 0' }}>
+                  <div style={{ padding: '4px 12px' }}>
+                    <span style={{ fontSize: 11, fontWeight: WT.wEmph, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>Unidades</span>
+                  </div>
+                  {fUnits.map(u => {
+                    const ids = u.pros.map(p => p.id);
+                    const allOn = ids.every(id => has('pro', id));
+                    const someOn = ids.some(id => has('pro', id));
+                    const toggleUnit = () => u.pros.forEach(p => { const on = has('pro', p.id); if (allOn ? on : !on) onToggle({ kind: 'pro', id: p.id }); });
+                    return (
+                      <button key={u.id} onClick={toggleUnit} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 12px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font }}
+                        onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <span style={{ width: 16, height: 16, borderRadius: WT.rS, flex: 'none', border: `1.5px solid ${allOn || someOn ? WT.accentFill : WT.borderHover}`, background: allOn ? WT.accentFill : (someOn ? WT.accentSoft : '#fff'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{allOn ? <WIcon name="check" size={12} color="#fff" strokeWidth={3} /> : someOn ? <span style={{ width: 8, height: 2, borderRadius: 1, background: WT.accentFill }} /> : null}</span>
+                        <span style={{ width: 24, height: 24, borderRadius: WT.rS, flex: 'none', background: WT.accentSoft, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><WIcon name="building-2" size={14} color={WT.accent} /></span>
+                        <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 13, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</span><span style={{ display: 'block', fontSize: 11, color: WT.muted }}>{u.pros.length} profissional(is) hoje</span></span>
+                      </button>
+                    );
+                  })}
+                  {(fPros.length > 0 || fEquip.length > 0 || fRooms.length > 0) && <WDivider />}
+                </div>
+              )}
               <Group title="Profissionais" items={fPros} kind="pro" />
               {fEquip.length > 0 && <WDivider />}
               <Group title="Equipamentos" items={fEquip} kind="equip" />
@@ -530,7 +561,7 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only }) {
   );
 }
 
-function ResourceBar({ selected, onAdd, onRemove, trailing, only, addLabel }) {
+function ResourceBar({ selected, onAdd, onRemove, trailing, only, addLabel, date }) {
   const [pick, setPick] = React.useState(null);
   const onlyEquip = only && only.length === 1 && only[0] === 'equip';
   const addText = addLabel || (onlyEquip ? 'Adicionar equipamento' : 'Adicionar agenda');
@@ -547,14 +578,14 @@ function ResourceBar({ selected, onAdd, onRemove, trailing, only, addLabel }) {
       <button onClick={e => setPick(e.currentTarget.getBoundingClientRect())} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 12px', borderRadius: WT.pill, border: `1px dashed ${WT.borderHover}`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 13, fontWeight: WT.wEmph, color: WT.accent }}>
         <WIcon name="plus" size={14} color={WT.accent} /> {addText}
       </button>
-      {pick && <ResourcePicker selected={selected} anchorRect={pick} only={only} onClose={() => setPick(null)} onToggle={res => (selected.some(r => r.kind === res.kind && r.id === res.id) ? onRemove(res) : onAdd(res))} />}
+      {pick && <ResourcePicker selected={selected} anchorRect={pick} only={only} date={date} onClose={() => setPick(null)} onToggle={res => (selected.some(r => r.kind === res.kind && r.id === res.id) ? onRemove(res) : onAdd(res))} />}
       {trailing && <><span style={{ flex: 1 }} />{trailing}</>}
     </div>
   );
 }
 
 // vertical agenda selector for the sidebar (mesma seleção do ResourceBar, layout empilhado)
-function AgendaSidebarPanel({ selected, onAdd, onRemove }) {
+function AgendaSidebarPanel({ selected, onAdd, onRemove, date }) {
   const [pick, setPick] = React.useState(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -574,7 +605,7 @@ function AgendaSidebarPanel({ selected, onAdd, onRemove }) {
       <button onClick={e => setPick(e.currentTarget.getBoundingClientRect())} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', height: 34, borderRadius: WT.rM, border: `1px dashed ${WT.borderHover}`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 13, fontWeight: WT.wEmph, color: WT.accent }}>
         <WIcon name="plus" size={14} color={WT.accent} /> Adicionar agenda
       </button>
-      {pick && <ResourcePicker selected={selected} anchorRect={pick} onClose={() => setPick(null)} onToggle={res => (selected.some(r => r.kind === res.kind && r.id === res.id) ? onRemove(res) : onAdd(res))} />}
+      {pick && <ResourcePicker selected={selected} anchorRect={pick} date={date} onClose={() => setPick(null)} onToggle={res => (selected.some(r => r.kind === res.kind && r.id === res.id) ? onRemove(res) : onAdd(res))} />}
     </div>
   );
 }
@@ -600,7 +631,7 @@ function MultipleView({ state, set, appts, blocks, drag, onSlotClick, onCardOpen
   const remove = res => set(s => ({ multiResources: (s.multiResources && s.multiResources.length ? s.multiResources : DEF).filter(r => !(r.kind === res.kind && r.id === res.id)) }));
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <ResourceBar selected={selected} onAdd={add} onRemove={remove} />
+      <ResourceBar selected={selected} onAdd={add} onRemove={remove} date={state.date} />
       <div style={{ flex: 1, minHeight: 0 }}>
         {columns.length === 0
           ? <EmptyState icon="layout-grid" title="Nenhuma agenda selecionada" hint="Use “Adicionar agenda” para incluir profissionais, equipamentos ou salas." />

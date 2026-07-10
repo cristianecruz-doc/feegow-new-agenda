@@ -148,7 +148,7 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
           <WToggle checked={clinica} onChange={setClinica} label="Clínica inteira (todas as agendas)" />
           {!clinica && !readOnly && (
             <div style={{ border: `1px solid ${WT.border}`, borderRadius: WT.rM, overflow: 'hidden' }}>
-              <ResourceBar selected={resources} onAdd={r => setResources(s => [...s, r])} onRemove={r => setResources(s => s.filter(x => !(x.kind === r.kind && x.id === r.id)))} />
+              <ResourceBar selected={resources} date={date} onAdd={r => setResources(s => [...s, r])} onRemove={r => setResources(s => s.filter(x => !(x.kind === r.kind && x.id === r.id)))} />
             </div>
           )}
           {!clinica && readOnly && (

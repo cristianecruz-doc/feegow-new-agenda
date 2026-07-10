@@ -224,7 +224,7 @@ function Sidebar({ collapsed, onToggle, date, onSelectDate, onCreate, agendaSel 
           {agendaSel && window.AgendaSidebarPanel && (
             <>
               <div style={{ borderTop: `1px solid ${WT.borderSub}` }} />
-              <AgendaSidebarPanel selected={agendaSel.selected} onAdd={agendaSel.add} onRemove={agendaSel.remove} />
+              <AgendaSidebarPanel selected={agendaSel.selected} onAdd={agendaSel.add} onRemove={agendaSel.remove} date={agendaSel.date} />
             </>
           )}
         </>
