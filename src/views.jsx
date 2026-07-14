@@ -121,20 +121,20 @@ function GradeBandHeader({ g, HEADER_H }) {
   const [wide, setWide] = React.useState(false);
   React.useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
-    const check = () => setWide(el.clientWidth >= 230);
+    const check = () => setWide(el.clientWidth >= 240);
     check();
     let ro; if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(check); ro.observe(el); }
     return () => ro && ro.disconnect();
   }, []);
   return (
-    <div ref={ref} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_H, background: g.color + '1f', borderBottom: `1px solid ${g.color}33`, display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px 0 8px', zIndex: 1 }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: g.color, flex: 'none' }} />
-      <span style={{ fontSize: 10.5, fontWeight: WT.wHead, color: g.color, letterSpacing: '.03em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.label ? `${g.label}${g.room ? ' · ' + roomShort(g.room) : ''}` : (g.room ? `${g.room} · Unidade Centro` : 'Unidade Centro')}</span>
+    <div ref={ref} style={{ position: 'absolute', top: -HEADER_H, left: 0, right: 0, height: HEADER_H, background: `color-mix(in srgb, ${g.color} 15%, #fff)`, border: `1px solid ${g.color}3d`, borderLeft: `3px solid ${g.color}`, borderRadius: `${WT.rS} ${WT.rS} 0 0`, display: 'flex', alignItems: 'center', gap: 5, padding: '0 6px 0 8px', zIndex: 2 }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: g.color, flex: 'none' }} />
+      <span style={{ fontSize: 12, fontWeight: WT.wXbold, color: g.color, letterSpacing: '.01em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.label ? `${g.label}${g.room ? ' · ' + roomShort(g.room) : ''}` : (g.room ? `${g.room} · Unidade Centro` : 'Unidade Centro')}</span>
       <span style={{ flex: 1 }} />
       {g.doctoralia && (
         <span title="Disponível em Doctoralia" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', cursor: 'help' }}>
-          {wide && <span style={{ fontSize: 10, fontWeight: WT.wHead, color: '#00928c', whiteSpace: 'nowrap' }}>Disponível em Doctoralia</span>}
-          <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" style={{ width: 14, height: 14, display: 'block' }} />
+          {wide && <span style={{ fontSize: 11, fontWeight: WT.wXbold, color: '#00847e', whiteSpace: 'nowrap' }}>Disponível em Doctoralia</span>}
+          <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" style={{ width: 15, height: 15, display: 'block' }} />
         </span>
       )}
     </div>
@@ -148,8 +148,7 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
   const GUTTER = 24; // faixa clicável à direita p/ criar agendamento paralelo (mesmo horário), estilo Google
   const layout = laneLayout(appts);
   const gradeBlocks = grades || [];
-  const HEADER_H = 18; // strip reserved at top of each labeled band so the header never overlaps a card
-  const labeledStarts = new Set(gradeBlocks.filter(g => g.label || g.room || g.doctoralia).map(g => toMin(g.start)));
+  const HEADER_H = 24; // faixa do título da grade, ancorada ACIMA do primeiro horário (nunca sobre um slot)
   // coverage = ranges where booking is allowed. From this column's grades, or an explicit
   // merged coverage (Week multi-resource). Empty array given explicitly = book anywhere.
   const coverRanges = coverage != null ? coverage : gradeBlocks.map(g => [toMin(g.start), toMin(g.end)]);
@@ -259,13 +258,12 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
         </div>
       )}
 
-      {/* appointment cards (cards at a labeled band start are nudged below the header strip) */}
+      {/* appointment cards — títulos de grade flutuam ACIMA do primeiro slot, então nada de nudge */}
       {layout.map(ev => {
-        const headOff = labeledStarts.has(ev.s) ? HEADER_H : 0;
         const GAP = 4; // margem mínima entre cards (Google-style)
         return (
           <AppointmentCard key={ev.a.id} ev={ev}
-            top={(ev.s - startMin) * pxPerMin + headOff + GAP / 2} height={ev.a.dur * pxPerMin - GAP - headOff}
+            top={(ev.s - startMin) * pxPerMin + GAP / 2} height={ev.a.dur * pxPerMin - GAP}
             leftPct={(ev.lane / ev.lanes) * 100} widthPct={(1 / ev.lanes) * 100} gutter={GUTTER}
             cardStyle={cardStyle} dimmed={freeOnly && bookable} showPro={showPro} conflict={conflictAt(ev.a)}
             onOpen={onCardOpen}

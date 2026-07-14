@@ -53,7 +53,7 @@ function ProductTab({ active, label, children, onClick }) {
     </button>
   );
 }
-function TopNavbar({ unit, onUnit, onToggleSidebar, compact, agendasInSidebar, onToggleAgendas }) {
+function TopNavbar({ unit, onUnit, onToggleSidebar, compact }) {
   return (
     <header style={{ flex: 'none', display: 'flex', flexDirection: 'column', zIndex: 30 }}>
       {/* Linha 1 — faixa escura: alternador de produtos */}
@@ -81,9 +81,6 @@ function TopNavbar({ unit, onUnit, onToggleSidebar, compact, agendasInSidebar, o
             <span style={{ width: 1, height: 22, background: WT.borderSub, margin: '0 6px', flex: 'none' }} />
             <WIconButton name="database" color={WT.fg2} title="Cadastros" />
             <WIconButton name="settings" color={WT.fg2} title="Configurações" />
-            <WIconButton name={agendasInSidebar ? 'panel-top' : 'panel-left'} active={agendasInSidebar}
-              color={agendasInSidebar ? WT.accent : WT.fg2} onClick={onToggleAgendas}
-              title={agendasInSidebar ? 'Mostrar agendas no topo' : 'Mostrar agendas na barra lateral'} />
           </nav>
         )}
         <div style={{ flex: 1 }} />
@@ -179,7 +176,7 @@ function CreateButton({ collapsed, onCreate }) {
 }
 
 const LEGEND = [
-  ['marcado', 'Marcado'], ['confirmado', 'Confirmado'], ['aguardando', 'Aguardando'], ['em_atendimento', 'Em atendimento'], ['finalizado', 'Finalizado'], ['faltou', 'Faltou'], ['cancelado', 'Cancelado'],
+  ['marcado', 'Marcado'], ['confirmado', 'Confirmado'], ['aguardando', 'Aguardando'], ['em_atendimento', 'Em atendimento'], ['finalizado', 'Finalizado'], ['faltou', 'Faltou'], ['remarcado', 'Remarcado'], ['cancelado', 'Cancelado'],
 ];
 
 function Sidebar({ collapsed, onToggle, date, onSelectDate, onCreate, agendaSel }) {

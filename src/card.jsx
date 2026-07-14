@@ -307,6 +307,7 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
           <Row icon="banknote"><strong style={{ fontWeight: WT.wHead }}>{a.price ? brl(a.price) : 'Sem cobrança'}</strong></Row>
           {a.note && <Row icon="sticky-note"><span style={{ color: WT.fg2 }}>{a.note}</span></Row>}
           {a.reason && a.status === 'cancelado' && <Row icon="info"><span style={{ color: WT.danger }}>{a.reason}</span></Row>}
+          {a.reason && a.status === 'remarcado' && <Row icon="calendar-clock"><span style={{ color: STATUS.remarcado.fg }}>{a.reason}</span></Row>}
           {(() => {
             const ns = notifSummary(a);
             if (!ns.total) return null;

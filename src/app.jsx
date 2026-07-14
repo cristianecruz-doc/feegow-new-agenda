@@ -36,8 +36,8 @@ function App() {
     view: 'dia', date: TODAY, dayPro: 'p1', extraResources: [],
     filters: { pros: null, spec: [], conv: [], unit: [], room: [] }, freeOnly: false,
     sidebarCollapsed: false,
-    // Posição do seletor de agendas: 'top' (barra acima da grade) | 'sidebar'
-    agendasPlacement: 'top',
+    // Seletor de agendas fixo na barra lateral (abaixo do status)
+    agendasPlacement: 'sidebar',
     // Configurações de visualização do usuário
     cardStyle: 'typebar', density: 'comfortable',
     // Sinalizadores exibidos nos cards
@@ -202,8 +202,7 @@ function App() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: WT.bg }}>
-      <TopNavbar unit="Unidade Centro" onUnit={() => {}} compact={compact} onToggleSidebar={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))}
-        agendasInSidebar={agendasInSidebar} onToggleAgendas={() => set(s => ({ agendasPlacement: s.agendasPlacement === 'sidebar' ? 'top' : 'sidebar' }))} />
+      <TopNavbar unit="Unidade Centro" onUnit={() => {}} compact={compact} onToggleSidebar={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {!compact && <Sidebar collapsed={app.sidebarCollapsed} onToggle={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} date={app.date} onSelectDate={iso => set({ date: iso })} onCreate={onCreate} agendaSel={sidebarAgendaSel} />}
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>

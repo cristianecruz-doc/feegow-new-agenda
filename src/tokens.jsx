@@ -35,15 +35,16 @@ const WT = {
 // ---- Appointment STATUS (spec §4.1) -----------------------------------------
 // Patient status on the timeline. label PT · fg/bg for chip · dot color · badge type
 const STATUS = {
-  marcado:        { label: 'Marcado',        short: 'Marcado',    fg: '#565f5f', bg: '#eef0f0', dot: '#888f8f', icon: 'circle',          badge: 'neutral' },
-  confirmado:     { label: 'Confirmado',      short: 'Confirm.',   fg: '#1f6fb0', bg: '#e8f1f9', dot: '#1f6fb0', icon: 'check',           badge: 'info' },
-  aguardando:     { label: 'Aguardando',      short: 'Aguard.',    fg: '#9a6700', bg: '#fdf3da', dot: '#d99e00', icon: 'armchair',        badge: 'warning' },
-  em_atendimento: { label: 'Em atendimento',  short: 'Atend.',     fg: '#006a59', bg: '#dff9f2', dot: '#006a59', icon: 'stethoscope',     badge: 'accent' },
-  finalizado:     { label: 'Finalizado',      short: 'Final.',     fg: '#176d00', bg: '#f1f7ec', dot: '#176d00', icon: 'check-check',     badge: 'success' },
-  faltou:         { label: 'Faltou',          short: 'Faltou',     fg: '#b42318', bg: '#fbeae8', dot: '#b42318', icon: 'user-x',          badge: 'danger' },
-  cancelado:      { label: 'Cancelado',       short: 'Cancel.',    fg: '#888f8f', bg: '#f3f5f5', dot: '#afb4b4', icon: 'x',               badge: 'neutral' },
+  marcado:        { label: 'Marcado',        short: 'Marcado',    fg: '#565f5f', bg: '#eef0f0', dot: '#8a9090', icon: 'circle',          badge: 'neutral' },
+  confirmado:     { label: 'Confirmado',      short: 'Confirm.',   fg: '#1f6fb0', bg: '#e8f1f9', dot: '#2477bd', icon: 'check',           badge: 'info' },
+  aguardando:     { label: 'Aguardando',      short: 'Aguard.',    fg: '#9a6700', bg: '#fdf3da', dot: '#e2960a', icon: 'armchair',        badge: 'warning' },
+  em_atendimento: { label: 'Em atendimento',  short: 'Atend.',     fg: '#7a3ba8', bg: '#f4edfa', dot: '#8a45bd', icon: 'stethoscope',     badge: 'neutral' },
+  finalizado:     { label: 'Finalizado',      short: 'Final.',     fg: '#0a5c4a', bg: '#e6f4ef', dot: '#0b5f4c', icon: 'check-check',     badge: 'success' },
+  faltou:         { label: 'Faltou',          short: 'Faltou',     fg: '#c02a1b', bg: '#fbeae8', dot: '#d0342a', icon: 'user-x',          badge: 'danger' },
+  remarcado:      { label: 'Remarcado',       short: 'Remarc.',    fg: '#1c1f1f', bg: '#ebeded', dot: '#242727', icon: 'calendar-clock',  badge: 'neutral' },
+  cancelado:      { label: 'Cancelado',       short: 'Cancel.',    fg: '#888f8f', bg: '#f3f5f5', dot: '#c2c7c7', icon: 'x',               badge: 'neutral' },
 };
-const STATUS_ORDER = ['marcado', 'confirmado', 'aguardando', 'em_atendimento', 'finalizado', 'faltou', 'cancelado'];
+const STATUS_ORDER = ['marcado', 'confirmado', 'aguardando', 'em_atendimento', 'finalizado', 'faltou', 'remarcado', 'cancelado'];
 
 // ---- Appointment TYPE color (spec §M3) — auto-assigned by procedure ----------
 // Separate dimension from status. Rendered as left bar + optional fill tint.

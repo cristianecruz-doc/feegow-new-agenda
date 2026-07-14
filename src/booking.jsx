@@ -445,8 +445,54 @@ function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms }) {
 }
 
 // ---- Booking host (drawer / modal / sheet) ----------------------------------
+// ---- Trilha de alterações do agendamento (drawer sobreposta) ----------------
+function AuditTrailDrawer({ appt, compact, onClose }) {
+  const log = apptAuditLog(appt);
+  const useSheet = compact;
+  const width = useSheet ? '100%' : Math.min(460, window.innerWidth - 48);
+  const fmtWhen = w => (typeof fmtNotifWhen === 'function' ? fmtNotifWhen(w) : w.toLocaleString('pt-BR'));
+  return (
+    <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, background: WT.backdrop || '#25282880', zIndex: 1200, display: 'flex', justifyContent: useSheet ? 'center' : 'flex-end', alignItems: useSheet ? 'flex-end' : 'stretch' }}>
+      <div onMouseDown={e => e.stopPropagation()} style={{ background: WT.raised, display: 'flex', flexDirection: 'column', boxShadow: WT.shDialog, width, height: useSheet ? '88%' : '100%', maxWidth: '100%', borderRadius: useSheet ? '16px 16px 0 0' : 0, animation: useSheet ? 'sheetUp .22s ease' : 'drawerIn .2s ease', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: `1px solid ${WT.borderSub}`, flex: 'none' }}>
+          <WIcon name="history" size={18} color={WT.accent} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: WT.wHead, color: WT.fg }}>Histórico de alterações</div>
+            <div style={{ fontSize: 12, color: WT.muted }}>{log.length} registro{log.length !== 1 ? 's' : ''} · {fmtLongDate(appt.date)}{appt.start ? ` · ${appt.start}` : ''}</div>
+          </div>
+          <WIconButton name="x" onClick={onClose} />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 28px' }}>
+          {log.length === 0
+            ? <div style={{ fontSize: 13, color: WT.muted }}>Nenhuma alteração registrada.</div>
+            : (
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ position: 'absolute', left: 14, top: 6, bottom: 6, width: 2, background: WT.borderSub }} />
+                {log.map((e, i) => (
+                  <div key={i} style={{ position: 'relative', display: 'flex', gap: 14, paddingBottom: i === log.length - 1 ? 0 : 18 }}>
+                    <span style={{ width: 30, height: 30, borderRadius: '50%', flex: 'none', background: e.color + '1a', border: `2px solid ${WT.raised}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                      <WIcon name={e.icon} size={15} color={e.color} />
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: WT.wEmph, color: WT.fg }}>{e.title}</div>
+                      {e.detail && <div style={{ fontSize: 12.5, color: WT.fg2, marginTop: 1 }}>{e.detail}</div>}
+                      <div style={{ fontSize: 11.5, color: WT.muted, marginTop: 3, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        <WIcon name="user" size={11} color={WT.muted} />{e.actor}<span style={{ opacity: .5 }}>·</span>{fmtWhen(e.when)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BookingHost({ init, config, flow, compact, perms, appts, flash, onCancel, onSave, onDraft }) {
   const [tab, setTab] = React.useState('agendamento');
+  const [showAudit, setShowAudit] = React.useState(false);
   const [patient, setPatient] = React.useState(init.patient || null);
   const pid = patient && patient.patientId;
   const pObj = pid ? patientById(pid) : null;
@@ -456,12 +502,14 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
   const title = init.fitIn ? 'Novo encaixe' : (init.editing ? 'Editar agendamento' : 'Novo agendamento');
   const ptName = pObj ? pObj.name : (patient && patient.patientName);
 
+  const editing = !!init.editing && !!init.appt;
   const Header = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: `1px solid ${WT.borderSub}`, flex: 'none' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 16, fontWeight: WT.wHead, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ptName || title}</div>
         <div style={{ fontSize: 12, color: WT.muted }}>{ptName ? title + ' · ' : ''}{fmtLongDate(init.date || TODAY)}{init.time ? ` · ${init.time}` : ''}</div>
       </div>
+      {editing && <WButton variant="default" size="s" leadingIcon="history" label="Alterações" onClick={() => setShowAudit(true)} />}
       <WIconButton name="x" onClick={onCancel} />
     </div>
   );
@@ -491,8 +539,9 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
         <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} />
         {body}
       </div>
+      {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
     </div>
   );
 }
 
-Object.assign(window, { PatientAutocomplete, QuickCreatePopover, PatientField, BookingForm, BookingHost });
+Object.assign(window, { PatientAutocomplete, QuickCreatePopover, PatientField, BookingForm, BookingHost, AuditTrailDrawer });

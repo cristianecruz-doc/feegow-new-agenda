@@ -258,26 +258,53 @@ function _statusFor(iso, startMin, dur, seed) {
   if (startMin - NOW_MIN_D <= 90) return 'confirmado';
   return seed % 3 === 0 ? 'confirmado' : 'marcado';
 }
+// todos os slots possíveis (ocupados ou não) de um profissional num dia
+function _slotsForDay(proId, iso) {
+  const slots = [];
+  gradesFor(proId, iso).forEach(g => {
+    const step = g.slotMin || 30;
+    const procs = (g.procs && g.procs.length) ? g.procs : ['retorno'];
+    for (let s = _hm(g.start); s + step <= _hm(g.end); s += step) {
+      if ((g.intervals || []).some(iv => s >= _hm(iv.start) && s < _hm(iv.end))) continue;
+      const hhmm = fmtMin(s);
+      const seed = _nseed(iso + proId + hhmm);
+      slots.push({ g, s, step, hhmm, seed, procId: procs[seed % procs.length] });
+    }
+  });
+  return slots;
+}
+function _apptFromSlot(proId, iso, slot, statusOverride, extraOpts) {
+  const { g, s, step, hhmm, seed, procId } = slot;
+  const proc = PROCS[procId] || {};
+  const pt = PATIENTS[(seed >>> 3) % PATIENTS.length].id;
+  const conv = g.convenios ? g.convenios[seed % g.convenios.length] : undefined;
+  const opts = { date: iso, ...(extraOpts || {}) };
+  if (proc.reqEquip) opts.equip = proc.reqEquip;
+  const status = statusOverride || _statusFor(iso, s, proc.dur || step, seed);
+  return A(proId, pt, procId, hhmm, status, conv, opts);
+}
+const _CANCEL_REASONS = ['Cancelado pelo paciente', 'Cancelado pela clínica', 'Paciente desmarcou', 'Convênio não autorizado'];
+const _RESCHED_REASONS = ['Remarcado a pedido do paciente', 'Remarcado por conflito de agenda', 'Remarcado pela clínica'];
 function _genMonthAppts() {
   const out = [];
   _monthDates().forEach(iso => {
     PROS.forEach(pro => {
-      gradesFor(pro.id, iso).forEach(g => {
-        const step = g.slotMin || 30;
-        const procs = (g.procs && g.procs.length) ? g.procs : ['retorno'];
-        for (let s = _hm(g.start); s + step <= _hm(g.end); s += step) {
-          if ((g.intervals || []).some(iv => s >= _hm(iv.start) && s < _hm(iv.end))) continue;
-          const hhmm = fmtMin(s);
-          const seed = _nseed(iso + pro.id + hhmm);
-          if (seed % 100 >= 48) continue;                    // ~48% ocupação → sobram horários livres
-          const procId = procs[seed % procs.length];
-          const proc = PROCS[procId] || {};
-          const pt = PATIENTS[(seed >>> 3) % PATIENTS.length].id;
-          const conv = g.convenios ? g.convenios[seed % g.convenios.length] : undefined;
-          const opts = { date: iso };
-          if (proc.reqEquip) opts.equip = proc.reqEquip;
-          out.push(A(pro.id, pt, procId, hhmm, _statusFor(iso, s, proc.dur || step, seed), conv, opts));
-        }
+      const slots = _slotsForDay(pro.id, iso);
+      if (!slots.length) return;                             // dia sem grade → sem agendamentos
+      // ~48% de ocupação determinística; sobram horários livres
+      let occupied = slots.filter(sl => sl.seed % 100 < 48);
+      if (occupied.length < 2) occupied = slots.slice(0, Math.min(2, slots.length));
+      // escolhe 2 slots distintos para os exemplos obrigatórios (1 cancelado + 1 remarcado)
+      const daySeed = _nseed('ex' + iso + pro.id);
+      const iCan = daySeed % occupied.length;
+      let iRem = (daySeed >>> 4) % occupied.length;
+      if (iRem === iCan) iRem = (iRem + 1) % occupied.length;
+      const canReason = _CANCEL_REASONS[daySeed % _CANCEL_REASONS.length];
+      const remReason = _RESCHED_REASONS[(daySeed >>> 2) % _RESCHED_REASONS.length];
+      occupied.forEach((sl, i) => {
+        if (i === iCan) out.push(_apptFromSlot(pro.id, iso, sl, 'cancelado', { reason: canReason }));
+        else if (i === iRem) out.push(_apptFromSlot(pro.id, iso, sl, 'remarcado', { reason: `${remReason} · era ${sl.hhmm}` }));
+        else out.push(_apptFromSlot(pro.id, iso, sl));
       });
     });
   });
@@ -425,9 +452,38 @@ function fmtNotifWhen(d) {
   return `${pfx} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+// ---- Trilha de alterações do agendamento (histórico) -------------------------
+// Mock determinístico no espírito de apptNotifications: eventos derivados do
+// status atual e do "agora". Cada entrada: { icon, color, title, detail, actor, when }.
+const _AUDIT_ACTORS = ['Recepção · Juliana', 'Recepção · Marcos', 'Central de agendamento', 'Portal do paciente'];
+function apptAuditLog(a) {
+  if (!a) return [];
+  const seed = _nseed('audit' + a.id);
+  const start = apptDateTime(a);
+  const endDT = new Date(start.getTime() + (a.dur || 30) * 60000);
+  const actor = _AUDIT_ACTORS[seed % _AUDIT_ACTORS.length];
+  const proName = (PROS.find(p => p.id === a.pro) || {}).name;
+  const created = new Date(start.getTime() - (3 + (seed % 18)) * 86400000);
+  created.setHours(8 + (seed % 9), (seed >>> 3) % 60, 0, 0);
+  const out = [{ icon: 'calendar-plus', color: WT.info, title: 'Agendamento criado', detail: `${apptProcLabel(a)} · via ${a.channel || 'Telefone'}`, actor, when: created }];
+  const push = (icon, color, title, detail, when, act) => out.push({ icon, color, title, detail: detail || null, actor: act || actor, when });
+  if (seed % 5 === 0) push('pencil', WT.fg2, 'Procedimento alterado', apptProcLabel(a), new Date(created.getTime() + (26 + seed % 40) * 3600000));
+  if (a.status === 'remarcado') push('calendar-clock', (STATUS.remarcado || {}).dot || WT.fg, 'Horário remarcado', a.reason || null, new Date(start.getTime() - (1 + seed % 5) * 86400000));
+  if (['confirmado', 'aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) {
+    const ch = (NOTIF_CHANNELS[apptChannel(a)] || {}).label || 'WhatsApp';
+    push('check-check', WT.success, 'Presença confirmada pelo paciente', `via ${ch}`, new Date(start.getTime() - (18 + seed % 6) * 3600000), 'Paciente');
+  }
+  if (['aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) push('armchair', WT.warning, 'Check-in realizado', null, new Date(start.getTime() - (4 + seed % 9) * 60000));
+  if (['em_atendimento', 'finalizado'].includes(a.status)) push('stethoscope', WT.accent, 'Atendimento iniciado', null, new Date(start.getTime() + (seed % 6) * 60000), proName);
+  if (a.status === 'finalizado') push('check-check', WT.success, 'Atendimento finalizado', null, new Date(endDT.getTime() + (seed % 10) * 60000), proName);
+  if (a.status === 'faltou') push('user-x', WT.danger, 'Marcado como falta', null, new Date(endDT.getTime() + 30 * 60000));
+  if (a.status === 'cancelado') push('x', WT.muted, 'Agendamento cancelado', a.reason || null, new Date(Math.min(start.getTime() - (2 + seed % 20) * 3600000, NOW_DT.getTime())));
+  return out.sort((x, y) => x.when - y.when);
+}
+
 Object.assign(window, {
   TODAY, WEEK_START, PROS, specsOf, specLabel, proHasSpec, EQUIP, ROOMS, effectiveRoom, roomShort, GRADES, gradesFor, gradeAt, gradeSlotAt, gradeRoomAt, proRoomsOn, gradeAccepts, dayAcceptsCond, PROCS, PROC_LIST, CONVENIOS, UNITS, CHANNELS,
   PATIENTS, patientById, ALL_APPTS, SEED_BLOCKS, blockOnDate, blockCoversPro, recurLabel, blockEditable, DOW_ABBR, PATIENT_FIELDS, CLINIC_CONFIGS, PRIORITIES,
   apptProcIds, apptProcList, apptDurSum, apptPriceSum, apptProcLabel,
-  NOTIF_CHANNELS, NOTIF_STATUS, apptNotifications, notifSummary, fmtNotifWhen,
+  NOTIF_CHANNELS, NOTIF_STATUS, apptNotifications, notifSummary, fmtNotifWhen, apptAuditLog,
 });

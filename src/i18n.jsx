@@ -89,6 +89,11 @@ const I18N_TERMS = {
   'Unidades': 'Units', 'Unidade': 'Unit', 'Salas': 'Rooms',
   'Selecionar': 'Select', 'Limpar': 'Clear',
   // booking phrases
+  'Alterações': 'Changes', 'Histórico de alterações': 'Change history',
+  'Agendamento criado': 'Appointment created', 'Horário remarcado': 'Time rescheduled',
+  'Procedimento alterado': 'Procedure changed', 'Presença confirmada pelo paciente': 'Attendance confirmed by patient',
+  'Check-in realizado': 'Check-in done', 'Atendimento iniciado': 'Visit started', 'Atendimento finalizado': 'Visit completed',
+  'Marcado como falta': 'Marked as no-show', 'Agendamento cancelado': 'Appointment cancelled',
   'Cancelar agendamento': 'Cancel appointment',
   'Remarcar agendamento': 'Reschedule appointment',
   'Confirmar cancelamento': 'Confirm cancellation',
@@ -125,9 +130,9 @@ const I18N_TERMS = {
   'Consulta': 'Consultation', 'Retorno': 'Follow-up', 'Exame': 'Exam',
   'Procedimento': 'Procedure',
   'Marcado': 'Scheduled', 'Confirmado': 'Confirmed', 'Aguardando': 'Waiting',
-  'Finalizado': 'Completed', 'Faltou': 'No-show', 'Cancelado': 'Cancelled',
+  'Finalizado': 'Completed', 'Faltou': 'No-show', 'Cancelado': 'Cancelled', 'Remarcado': 'Rescheduled',
   'Confirm.': 'Confirm.', 'Aguard.': 'Waiting', 'Atend.': 'In prog.',
-  'Final.': 'Done', 'Cancel.': 'Cancelled',
+  'Final.': 'Done', 'Cancel.': 'Cancelled', 'Remarc.': 'Resched.',
   // convênios
   'Particular': 'Private',
   // doctoralia / availability
