@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Feegow · Nova Agenda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap" rel="stylesheet">
+<link rel="icon" href="assets/symbol-feegow-primary.svg">
+<meta name="ext-resource-dependency" content="assets/symbol-feegow-primary.svg" data-resource-id="feegowSymbol" />
+<meta name="ext-resource-dependency" content="assets/icon-doctoralia.png" data-resource-id="doctoIcon" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #f7f8f8; font-family: "InterVariable","Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color: #242727; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  #root { height: 100%; }
+  button, input, select, textarea { font-family: inherit; }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-thumb { background: #d2d6d6; border-radius: 999px; border: 3px solid #fff; }
+  ::-webkit-scrollbar-thumb:hover { background: #afb4b4; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes wspin { to { transform: rotate(360deg); } }
+  @keyframes wtoast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  @keyframes drawerIn { from { transform: translateX(24px); opacity: .4; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes sheetUp { from { transform: translateY(40px); } to { transform: translateY(0); } }
+  @keyframes modalIn { from { transform: scale(.97); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+  [data-lucide] { display: inline-flex; }
+  @media print {
+    body * { visibility: hidden !important; }
+    [data-print-area], [data-print-area] * { visibility: visible !important; }
+    [data-print-area] { position: absolute !important; left: 0; top: 0; width: 100%; height: auto !important; overflow: visible !important; padding: 0 !important; }
+    [data-print-only] { display: block !important; }
+    @page { margin: 16mm; }
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="16" fill="#006a59"/>
+      <rect x="26" y="26" width="48" height="48" rx="6" fill="#ffffff"/>
+      <rect x="26" y="26" width="48" height="11" rx="6" fill="#dff9f2"/>
+      <rect x="33" y="44" width="14" height="9" rx="2" fill="#1b5ea9"/>
+      <rect x="52" y="44" width="14" height="9" rx="2" fill="#007c68"/>
+      <rect x="33" y="57" width="14" height="9" rx="2" fill="#a23a7a"/>
+      <rect x="52" y="57" width="14" height="9" rx="2" fill="#dff9f2"/>
+    </svg>
+  </template>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script type="text/babel" src="src/tokens.jsx"></script>
+  <script type="text/babel" src="src/data.jsx"></script>
+  <script type="text/babel" src="src/primitives.jsx"></script>
+  <script type="text/babel" src="src/shell.jsx"></script>
+  <script type="text/babel" src="src/toolbar.jsx"></script>
+  <script type="text/babel" src="src/card.jsx"></script>
+  <script type="text/babel" src="src/views.jsx"></script>
+  <script type="text/babel" src="src/booking.jsx"></script>
+  <script type="text/babel" src="src/patient-tabs.jsx"></script>
+  <script type="text/babel" src="src/ops.jsx"></script>
+  <script type="text/babel" src="src/i18n.jsx"></script>
+  <script type="text/babel" src="src/tweaks-panel.jsx"></script>
+  <script type="text/babel" src="src/app.jsx"></script>
+</body>
+</html>
