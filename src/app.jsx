@@ -30,6 +30,11 @@ function App() {
   const [tw, setTweak] = useTweaks(TWEAK_DEFAULTS);
   React.useLayoutEffect(() => { if (window.I18N) window.I18N.set(tw.lang); });
   const mvp = tw.edition === 'mvp';
+  // #mvp / #final na URL (vindo do protótipo de transição) define a edição na abertura
+  React.useEffect(() => {
+    const h = (window.location.hash || '').replace('#', '');
+    if ((h === 'mvp' || h === 'final') && h !== tw.edition) setTweak('edition', h);
+  }, []);
   window.__mvp = mvp;
   // Configurações da Agenda (11 chaves legadas) — persistidas em localStorage
   const [cfg, setCfgState] = React.useState(cfgLoad);

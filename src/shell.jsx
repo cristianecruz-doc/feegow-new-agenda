@@ -57,7 +57,7 @@ function ModuleItem({ label, dropdown, active, items, current, onNavigate }) {
             {items.map(it => {
               const on = current === it.id;
               return (
-                <button key={it.id} onClick={() => { setOpen(false); onNavigate && onNavigate(it.id); }} style={{
+                <button key={it.id} onClick={() => { setOpen(false); if (it.href) { window.location.href = it.href; return; } onNavigate && onNavigate(it.id); }} style={{
                   display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 10px', borderRadius: WT.rM,
                   border: 'none', background: on ? WT.accentSoft : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, width: '100%',
                 }} onMouseEnter={e => { if (!on) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent'; }}>
@@ -66,6 +66,7 @@ function ModuleItem({ label, dropdown, active, items, current, onNavigate }) {
                     <span style={{ fontSize: 13.5, fontWeight: WT.wEmph, color: on ? WT.accent : WT.fg }}>{it.label}</span>
                     <span style={{ fontSize: 12, color: WT.muted, lineHeight: 1.35 }}>{it.desc}</span>
                   </span>
+                  {it.href && <WIcon name="arrow-up-right" size={14} color={WT.accent} style={{ flex: 'none', marginTop: 2 }} />}
                 </button>
               );
             })}
@@ -98,7 +99,11 @@ function EditionMenu({ edition, onEdition }) {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
   }, [open]);
-  const opts = [{ value: 'final', label: 'Final' }, { value: 'mvp', label: 'MVP' }];
+  const opts = [
+    { value: 'final', label: 'Final' },
+    { value: 'mvp', label: 'MVP' },
+    { value: 'legado', label: 'Legado', hint: 'Agenda atual · transição', href: 'legado.html' },
+  ];
   const cur = opts.find(o => o.value === edition) || opts[0];
   return (
     <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -112,16 +117,21 @@ function EditionMenu({ edition, onEdition }) {
         <WIcon name={open ? 'chevron-up' : 'chevron-down'} size={14} color={WT.muted} />
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 36, right: 0, minWidth: 168, background: WT.raised, borderRadius: WT.rL, border: `1px solid ${WT.border}`, boxShadow: WT.shDialog, padding: 6, zIndex: 60 }}>
+        <div style={{ position: 'absolute', top: 36, right: 0, minWidth: 212, background: WT.raised, borderRadius: WT.rL, border: `1px solid ${WT.border}`, boxShadow: WT.shDialog, padding: 6, zIndex: 60 }}>
           <div style={{ padding: '4px 10px 6px', fontSize: 10.5, fontWeight: WT.wEmph, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>Edição do produto</div>
           {opts.map(o => (
-            <button key={o.value} onClick={() => { onEdition(o.value); setOpen(false); }} style={{
+            <button key={o.value} onClick={() => { setOpen(false); if (o.href) { window.location.href = o.href; return; } onEdition(o.value); }} style={{
               display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: WT.rM,
               border: 'none', background: o.value === edition ? WT.hover : 'transparent', cursor: 'pointer', textAlign: 'left',
               fontFamily: WT.font, fontSize: 13.5, fontWeight: WT.wBody, color: WT.fg,
+              marginTop: o.href ? 5 : 0, borderTop: o.href ? `1px solid ${WT.borderSub}` : 'none', paddingTop: o.href ? 10 : 8,
             }} onMouseEnter={e => { if (o.value !== edition) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (o.value !== edition) e.currentTarget.style.background = 'transparent'; }}>
-              <WIcon name={o.value === edition ? 'check' : 'circle'} size={15} color={o.value === edition ? WT.accent : WT.muted} style={{ flex: 'none' }} />
-              {o.label}
+              <WIcon name={o.href ? 'history' : (o.value === edition ? 'check' : 'circle')} size={15} color={o.value === edition ? WT.accent : WT.muted} style={{ flex: 'none' }} />
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                {o.label}
+                {o.hint && <span style={{ fontSize: 11.5, color: WT.muted }}>{o.hint}</span>}
+              </span>
+              {o.href && <WIcon name="arrow-up-right" size={14} color={WT.accent} style={{ flex: 'none' }} />}
             </button>
           ))}
         </div>
