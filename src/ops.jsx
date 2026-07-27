@@ -53,6 +53,12 @@ function CancelModal({ a, onClose, onConfirm }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: WT.rM, background: WT.inset, fontSize: 12, color: WT.fg2 }}>
           <WIcon name="info" size={14} /> O motivo fica registrado no histórico e o horário é liberado.
         </div>
+        {a.paid && cfgGet('ContasAPagarCancelamento') && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: WT.rM, background: '#fff6ba', border: '1px solid #e8d27a', fontSize: 12.5, color: '#865200', lineHeight: 1.45 }}>
+            <WIcon name="banknote" size={15} color="#865200" style={{ flex: 'none', marginTop: 1 }} />
+            <span>Será criada uma conta a pagar de devolução de <strong style={{ fontWeight: WT.wHead }}>{brl(a.price || 0)}</strong> no financeiro.</span>
+          </div>
+        )}
       </div>
     </CenterModal>
   );

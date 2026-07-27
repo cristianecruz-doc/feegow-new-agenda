@@ -95,7 +95,7 @@ function ColHeader({ entity, sub, occupancy, onPick }) {
         </div>
         {sub && <div style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
       </div>
-      {occupancy != null && (
+      {occupancy != null && !window.__mvp && (
         <WBadge type={occupancy >= 80 ? 'danger' : occupancy >= 50 ? 'warning' : 'success'} style={{ flex: 'none' }}>{occupancy}%</WBadge>
       )}
     </div>
@@ -149,12 +149,21 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
   const layout = laneLayout(appts);
   const gradeBlocks = grades || [];
   const HEADER_H = 24; // faixa do título da grade, ancorada ACIMA do primeiro horário (nunca sobre um slot)
+  // filtro de procedimento/convênio: blocos de grade que não permitem ficam indisponíveis
+  const gf = window.__gradeFilter;
+  const gradeAllowed = g => !gf || ((!gf.conv.length || gf.conv.some(c => gradeAccepts(g, { conv: c }))) && (!gf.proc.length || gf.proc.some(id => gradeAccepts(g, { procId: id }))));
+  const activeGrades = gradeBlocks.filter(gradeAllowed);
   // coverage = ranges where booking is allowed. From this column's grades, or an explicit
   // merged coverage (Week multi-resource). Empty array given explicitly = book anywhere.
-  const coverRanges = coverage != null ? coverage : gradeBlocks.map(g => [toMin(g.start), toMin(g.end)]);
+  const coverRanges = coverage != null ? coverage : activeGrades.map(g => [toMin(g.start), toMin(g.end)]);
   const hasCoverage = coverRanges.length > 0;
   const intervals = gradeBlocks.flatMap(g => (g.intervals || []).map(iv => ({ ...iv, color: g.color })));
   const inGrade = m => !hasCoverage || coverRanges.some(([s, e]) => m >= s && m < e);
+  // duração padrão do slot no horário (intervalo da grade ativa); fallback ao slotMin do grid
+  const slotDefaultAt = m => { const g = gradeBlocks.find(g => m >= toMin(g.start) && m < toMin(g.end)); return (g && g.slotMin) || slotMin; };
+  // remarcação: só destaca livre onde o médico atende convênio + todos os procedimentos
+  const rxCond = window.__rxCond;
+  const gradeAcceptsRx = g => !rxCond || (((!rxCond.conv || rxCond.conv === 'Particular') || !g.convenios || g.convenios.includes(rxCond.conv)) && (rxCond.procIds || []).every(pid => !g.procs || g.procs.includes(pid)));
   const inInterval = m => intervals.some(iv => m >= toMin(iv.start) && m < toMin(iv.end));
   const inBlock = m => (blocks || []).some(b => { const s = toMin(b.start), e = toMin(b.end); return m >= s && m < e; });
   // intervalo OU bloqueio cobrindo qualquer minuto da faixa [start, start+dur)
@@ -171,9 +180,11 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
   };
   const dropMin = drag.appt && drag.colId === colId ? drag.min : null;
 
+  // durante remarcação, o horário só é "escolhível" se a grade ativa atende convênio + procedimentos
+  const rxOkAt = m => { if (!rxCond) return true; const g = gradeBlocks.find(g => m >= toMin(g.start) && m < toMin(g.end)); return !!g && gradeAcceptsRx(g); };
   return (
     <div ref={ref} style={{ position: 'relative', flex: 1, minWidth: 0, height: (endMin - startMin) * pxPerMin }}
-      onMouseMove={e => { if (!drag.appt) { const m = minFromY(e.clientY); setHoverMin((!inGrade(m) || inInterval(m) || inBlock(m)) ? null : m); } }}
+      onMouseMove={e => { if (!drag.appt) { const m = minFromY(e.clientY); setHoverMin((!inGrade(m) || inInterval(m) || inBlock(m) || !rxOkAt(m)) ? null : m); } }}
       onMouseLeave={() => setHoverMin(null)}
       onClick={e => { if ((e.target === ref.current || e.currentTarget === e.target) && hoverMin != null) onSlotClick(colId, hoverMin, { left: e.clientX, top: e.clientY, right: e.clientX, bottom: e.clientY }); }}
       onDragOver={e => { if (drag.appt) { e.preventDefault(); drag.setMin(colId, minFromY(e.clientY)); } }}
@@ -181,10 +192,10 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
     >
       {/* outside the doctor's availability grade = indisponível (subtle hatch) */}
       {hasCoverage && rangeGaps(coverRanges, startMin, endMin).map(([s, e], i) => (
-        <div key={'ng' + i} title="Sem disponibilidade para agendamento" style={{ position: 'absolute', left: 0, right: 0, top: (s - startMin) * pxPerMin, height: (e - s) * pxPerMin, background: 'repeating-linear-gradient(135deg,#fafbfb,#fafbfb 7px,#f0f2f2 7px,#f0f2f2 14px)', zIndex: 0 }} />
+        <div key={'ng' + i} title="Sem disponibilidade para agendamento" style={{ position: 'absolute', left: 0, right: 0, top: (s - startMin) * pxPerMin, height: (e - s) * pxPerMin, background: 'repeating-linear-gradient(135deg,#fafbfb,#fafbfb 4px,#eef0f0 4px,#eef0f0 5px)', zIndex: 0 }} />
       ))}
       {/* availability grade bands (doctor's color) — só barrinha lateral, sem fundo */}
-      {gradeBlocks.map((g, i) => {
+      {activeGrades.map((g, i) => {
         const gh = (toMin(g.end) - toMin(g.start)) * pxPerMin;
         return (
           <div key={'g' + i} title={`${g.label || 'Disponível'} · ${g.start}–${g.end}${g.room ? ' · ' + g.room : ''} · intervalo ${g.slotMin} min`} style={{ position: 'absolute', left: 0, right: 0, top: (toMin(g.start) - startMin) * pxPerMin, height: gh, borderLeft: `3px solid ${g.color}`, zIndex: 0 }}>
@@ -213,7 +224,12 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
       )}
 
       {/* free-slot highlight — only within the doctor's grade & where the filter allows */}
-      {freeOnly && bookable && freeWithinGrades(appts, (blocks || []).concat(intervals), gradeBlocks, startMin, endMin).map(([s, e], i) => (
+      {freeOnly && bookable && (gradeBlocks.length
+        ? activeGrades.filter(gradeAcceptsRx).flatMap(g => freeGaps(appts, (blocks || []).concat(intervals), toMin(g.start), toMin(g.end)))
+        : (rxCond ? [] : (hasCoverage
+            ? coverRanges.flatMap(([cs, ce]) => freeGaps(appts, (blocks || []).concat(intervals), cs, ce))
+            : freeGaps(appts, (blocks || []).concat(intervals), startMin, endMin)))
+      ).map(([s, e], i) => (
         <FreeSlot key={'free' + i} top={(s - startMin) * pxPerMin} height={(e - s) * pxPerMin - 3} s={s} e={e}
           onClick={rect => onSlotClick(colId, s, rect)} />
       ))}
@@ -238,7 +254,7 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
 
       {/* hover ghost / drop indicator */}
       {hoverMin != null && !drag.appt && (
-        <GhostSlot top={(hoverMin - startMin) * pxPerMin} height={slotMin * pxPerMin - 2} gutter={GUTTER} parallel={occupied(hoverMin)}
+        <GhostSlot top={(hoverMin - startMin) * pxPerMin} height={slotDefaultAt(hoverMin) * pxPerMin - 2} gutter={GUTTER} parallel={occupied(hoverMin)}
           onClick={() => onSlotClick(colId, hoverMin, ref.current.getBoundingClientRect())} />
       )}
       {dropMin != null && (() => {
@@ -329,8 +345,8 @@ function EmptyState({ icon, title, hint }) {
 function getGridConf(state) {
   const startMin = toMin(state.timeStart || '07:00');
   const endMin = toMin(state.timeEnd || '20:00');
-  const pxPerMin = { compact: 1.0, normal: 1.25, comfortable: 1.55 }[state.density || 'normal'];
-  return { startMin, endMin, slotMin: 15, pxPerMin };
+  const pxPerMin = { compact: 2.1, normal: 2.6, comfortable: 3.15 }[state.density || 'normal'];
+  return { startMin, endMin, slotMin: 5, pxPerMin };
 }
 
 // is a column bookable under the current especialidade / sala filter?
@@ -702,10 +718,12 @@ function ProgRow({ a }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0', minWidth: 0 }}>
       <span style={{ width: 116, flex: 'none', fontSize: 13, color: WT.fg2, fontVariantNumeric: 'tabular-nums' }}>{a.start}–{fmtMin(toMin(a.start) + (a.dur || 30))}</span>
-      <span style={{ width: 9, height: 9, borderRadius: '50%', flex: 'none', background: pro.color || st.dot }} />
-      <span title={st.label} style={{ width: 9, height: 9, borderRadius: '50%', flex: 'none', background: st.dot, boxShadow: `0 0 0 2px ${st.dot}26` }} />
-      <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        <span style={{ color: WT.fg2 }}>{pro.short || pro.name || '—'}</span> · <strong style={{ fontWeight: WT.wEmph }}>{pt.name}</strong> · {apptProcLabel(a)}{isRet ? ' · retorno' : ''}
+      <StatusSmartTag a={a} size="s" />
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 14, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 'none', maxWidth: '55%' }}>
+          <span style={{ color: WT.fg2 }}>{pro.short || pro.name || '—'}</span> · <strong style={{ fontWeight: WT.wEmph }}>{pt.name}</strong>
+        </span>
+        <ProcTag a={a} />
       </span>
       <span style={{ flex: 'none', fontSize: 12.5, color: WT.muted, whiteSpace: 'nowrap' }}>{valor}</span>
     </div>
@@ -790,8 +808,10 @@ function MonthView({ state, set, appts, blocks }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
                     {dayAppts.slice(0, 2).map(a => { const t = TYPES[apptType(a)]; const pt = patientById(a.pt) || {}; return (
-                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.bar, flex: 'none' }} />{a.start} {(pt.name || '').split(' ')[0]}
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{a.start}</span>
+                        <span style={{ flex: 'none', fontWeight: WT.wEmph, color: WT.fg }}>{(pt.name || '').split(' ')[0]}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', height: 15, background: t.tint, borderLeft: `3px solid ${t.bar}`, borderRadius: '2px 4px 4px 2px', padding: '0 5px 0 4px', color: t.fg, fontWeight: WT.wEmph, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{apptProcName(a)}</span>
                       </div>
                     ); })}
                     {dayAppts.length > 2 && <div style={{ fontSize: 11, color: WT.muted }}>+{dayAppts.length - 2} mais</div>}

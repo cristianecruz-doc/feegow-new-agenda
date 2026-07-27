@@ -86,7 +86,7 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
               {sel.firstVisit && <WBadge type="accent" icon="sparkles">1ª vez</WBadge>}
               {sel.priority && PRIORITIES[sel.priority] && <WBadge type="warning" icon={PRIORITIES[sel.priority].icon}>{PRIORITIES[sel.priority].label}</WBadge>}
             </div>
-            {sel.phone && <div style={{ fontSize: 12, color: WT.muted }}>{sel.phone}</div>}
+            {sel.phone && <div style={{ fontSize: 12, color: WT.muted }}>{sel.phone}{cfgGet('CPFBuscaPaciente') && sel.id ? ` · CPF ${cpfOf(sel)}` : ''}</div>}
           </div>
           <WIconButton name="x" dim={28} onClick={() => { onSelect(null); setQ(''); setOpen(true); }} />
         </div>
@@ -111,7 +111,7 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
           {matches.map(p => (
             <button key={p.id} onMouseDown={() => { onSelect({ patientId: p.id, patientName: p.name, isNew: false }); setOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <WAvatar initials={p.name.split(' ').map(w => w[0]).slice(0, 2).join('')} size={28} />
-              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, color: WT.fg }}>{p.name}</div><div style={{ fontSize: 12, color: WT.muted }}>{p.phone} · {p.conv}</div></div>
+              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, color: WT.fg }}>{p.name}</div><div style={{ fontSize: 12, color: WT.muted }}>{p.phone} · {p.conv}</div>{cfgGet('CPFBuscaPaciente') && <div style={{ fontSize: 12, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>CPF {cpfOf(p)}</div>}</div>
               {p.firstVisit && <WBadge type="accent">1ª vez</WBadge>}
             </button>
           ))}
@@ -129,17 +129,29 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
 
 // ---- Quick-create popover (Tier 1) ------------------------------------------
 function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft }) {
-  const pro = PROS.find(p => p.id === ctx.proId) || PROS[0];
+  const [proId, setProId] = React.useState(ctx.proId);
+  const pro = PROS.find(p => p.id === proId) || PROS[0];
+  const proOptions = ctx.proOptions && ctx.proOptions.length ? ctx.proOptions : PROS.map(p => p.id);
   const [patient, setPatient] = React.useState(null);
   const [procIds, setProcIds] = React.useState([]);
   const [time, setTime] = React.useState(ctx.time);
   const [pay, setPay] = React.useState('particular'); // 'particular' | 'convenio'
   const [conv, setConv] = React.useState('');
   const [tel, setTel] = React.useState('');
+  const [parentesco, setParentesco] = React.useState('Próprio paciente');
+  const [prepaid, setPrepaid] = React.useState(false);
   const [err, setErr] = React.useState({});
+  // regras vindas das Configurações da Agenda
+  const ptRec = patient && patient.patientId ? patientById(patient.patientId) : null;
+  const cardExpired = !!(ptRec && ptRec.cardExp) && pay === 'convenio';
+  const requireValidCard = cfgGet('validadeconveniovencido');
+  const faltasTh = cfgGet('QuantidadeFaltasPagtoPrevio');
+  const noShows = (ptRec && ptRec.noShows) || 0;
+  const needPrepay = faltasTh > 0 && noShows >= faltasTh;
+  const askParentesco = cfgGet('ExibirParentescoPacienteAgendar');
   const totalDur = procIds.reduce((s, id) => s + ((PROCS[id] || {}).dur || 0), 0);
   const totalPrice = procIds.reduce((s, id) => s + ((PROCS[id] || {}).price || 0), 0);
-  const grade = gradeAt(ctx.proId, ctx.date, time);
+  const grade = gradeAt(proId, ctx.date, time);
   // procedimentos permitidos pela grade do médico nesse horário
   const allowedProcs = grade && grade.procs ? PROC_LIST.filter(p => grade.procs.includes(p.id)) : PROC_LIST;
   // pre-fill payment from the selected patient's default convênio
@@ -151,7 +163,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
   // clear incompatible procedures when the grade changes
   React.useEffect(() => { if (grade && grade.procs) setProcIds(ids => ids.filter(id => grade.procs.includes(id))); }, [time]);
   // mantém o placeholder no grid sincronizado com horário + duração em criação
-  React.useEffect(() => { onDraft && onDraft({ time, dur: totalDur || gradeSlotAt(ctx.proId, ctx.date, time) || 30 }); }, [time, totalDur]);
+  React.useEffect(() => { onDraft && onDraft({ time, dur: totalDur || gradeSlotAt(proId, ctx.date, time) || 30 }); }, [time, totalDur]);
   const save = () => {
     const e = {};
     if (!patient) e.patient = 'Selecione um paciente';
@@ -159,8 +171,10 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
     if (!procIds.length) e.proc = 'Selecione ao menos um procedimento';
     if (pay === 'convenio' && !conv) e.conv = 'Selecione o convênio';
     if (pay === 'convenio' && conv && grade && grade.convenios && !grade.convenios.includes(conv)) e.conv = 'Convênio não atendido nesta grade';
+    if (cardExpired && requireValidCard) e.conv = `Carteirinha vencida em ${ptRec.cardExp} — atualize o cadastro para agendar por convênio`;
+    if (needPrepay && !prepaid) e.prepay = 'Confirme o pagamento antecipado para agendar';
     if (Object.keys(e).length) { setErr(e); return; }
-    onSave({ ...ctx, patient, procIds, time, payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular' });
+    onSave({ ...ctx, proId, patient, procIds, time, payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular' });
   };
   return (
     <WPopover anchorRect={anchorRect} onClose={onClose} width={340}>
@@ -169,11 +183,21 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
         <WIconButton name="x" dim={28} onClick={onClose} />
       </div>
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: WT.fg2 }}>
-          <WIcon name="user-round" size={14} color={pro.color} /> {pro.name}
-          <span style={{ flex: 1 }} />
-          <WIcon name="calendar" size={14} /> {fmtShortDate(ctx.date)}
-        </div>
+        {ctx.pickPro ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <WSelect value={proId} onChange={setProId} size="l"
+                options={proOptions.map(id => { const p = PROS.find(x => x.id === id); const free = !!gradeAt(id, ctx.date, time); return { value: id, label: `${p.name}${free ? '' : ' — sem grade neste horário'}` }; })} />
+            </div>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: WT.fg2, whiteSpace: 'nowrap' }}><WIcon name="calendar" size={14} /> {fmtShortDate(ctx.date)}</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: WT.fg2 }}>
+            <WIcon name="user-round" size={14} color={pro.color} /> {pro.name}
+            <span style={{ flex: 1 }} />
+            <WIcon name="calendar" size={14} /> {fmtShortDate(ctx.date)}
+          </div>
+        )}
         {grade && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: WT.rM, background: grade.color + '14', borderLeft: `3px solid ${grade.color}` }}>
             <span style={{ fontSize: 12, fontWeight: WT.wHead, color: grade.color }}>{grade.label || 'Disponível'}</span>
@@ -184,14 +208,33 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
         <WInput label="Telefone" required value={tel} onChange={v => { setTel(v); setErr(s => ({ ...s, tel: undefined })); }} placeholder="(11) 90000-0000" suffixIcon="phone" error={err.tel} size="l" />
         <ProcMultiSelect label="Procedimentos" required value={procIds} onChange={setProcIds} error={err.proc}
           hint={grade && grade.procs ? 'limitado pela grade' : null} options={allowedProcs} />
+        {needPrepay && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '10px 12px', borderRadius: WT.rM, background: '#fff6ba', border: `1px solid ${err.prepay ? WT.borderDanger : '#e8d27a'}` }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: WT.wHead, color: '#865200' }}>
+              <WIcon name="credit-card" size={14} color="#865200" />Pagamento antecipado obrigatório
+            </span>
+            <span style={{ fontSize: 12, color: '#865200', lineHeight: 1.45 }}>{noShows} faltas registradas — a clínica exige pagamento antecipado a partir de {faltasTh}.</span>
+            <WCheckbox checked={prepaid} onChange={v => { setPrepaid(v); setErr(s => ({ ...s, prepay: undefined })); }} label="Pagamento antecipado recebido" />
+            {err.prepay && <span style={{ fontSize: 12, color: WT.danger }}>{err.prepay}</span>}
+          </div>
+        )}
+        {askParentesco && (
+          <WSelect label="Parentesco / responsável" value={parentesco} onChange={setParentesco} placeholder="" size="l"
+            options={['Próprio paciente', 'Mãe/Pai', 'Responsável legal', 'Outro']} />
+        )}
         <div style={{ display: 'flex', gap: 10 }}>
           <WInput label="Horário" value={time} onChange={setTime} suffixIcon="clock" size="l" style={{ width: 110 }} />
           {procIds.length > 0 && <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}><WLabel>Resumo</WLabel><div style={{ height: 44, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: WT.fg2 }}><WBadge type="neutral"><span style={{ color: WT.fg2 }}>{totalDur} min</span></WBadge>{pay === 'particular' ? (totalPrice ? brl(totalPrice) : 'Sem cobrança') : <span style={{ color: WT.muted }}>Coberto pelo convênio</span>}</div></div>}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, ...(window.__mvp ? { display: 'none' } : null) }}>
           <WLabel required>Pagamento</WLabel>
           <WSegmented options={[{ value: 'particular', label: 'Particular' }, { value: 'convenio', label: 'Convênio' }]} value={pay} onChange={v => { setPay(v); setErr(s => ({ ...s, conv: undefined })); }} />
           {pay === 'convenio' && <WSelect value={conv} onChange={v => { setConv(v); setErr(s => ({ ...s, conv: undefined })); }} options={CONVENIOS.filter(c => c !== 'Particular')} placeholder="Selecione o convênio" error={err.conv} size="l" />}
+          {cardExpired && !requireValidCard && (
+            <span style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 6, fontSize: 12, color: '#865200', background: '#fff6ba', border: '1px solid #e8d27a', borderRadius: WT.pill, padding: '4px 10px', width: 'fit-content' }}>
+              <WIcon name="alert-triangle" size={13} color="#865200" />Carteirinha vencida em {ptRec.cardExp} — agendamento permitido
+            </span>
+          )}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}`, background: WT.inset, flex: 'none' }}>
@@ -376,24 +419,24 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
           <ProcMultiSelect label="Procedimentos" required value={form.procIds} onChange={setProcs} error={errors.procIds} options={PROC_LIST} />
           {form.procIds.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -2 }}><WIcon name="clock" size={13} color={WT.muted} /><span style={{ fontSize: 12, color: WT.muted }}>Duração total {totalDur} min · cor pelo 1º procedimento</span></div>}
           <WSelect label="Local / unidade" required value={form.local} onChange={v => upd({ local: v })} options={ROOMS.map(r => r.name)} error={errors.local} size="l" />
-          {(showEquip || form.equip || reqEquipId)
+          {!window.__mvp && ((showEquip || form.equip || reqEquipId)
             ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <WSelect label={reqEquipId ? 'Equipamento (exigido pelo procedimento)' : 'Equipamento'} required={!!reqEquipId} value={form.equip} onChange={v => upd({ equip: v })} options={[{ value: '', label: 'Nenhum' }, ...EQUIP.map(e => ({ value: e.id, label: e.name }))]} placeholder="Vincular equipamento…" size="l" />
                 {reqEquipId
                   ? <span style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 5 }}><WIcon name="info" size={12} color={WT.accent} />Equipamento exigido pelo procedimento selecionado.</span>
                   : <button type="button" onClick={() => { upd({ equip: '' }); setShowEquip(false); }} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: WT.muted, fontSize: 12, cursor: 'pointer', fontFamily: WT.font, padding: 0 }}>Remover equipamento</button>}
               </div>
-            : <button type="button" onClick={() => setShowEquip(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: WT.rM, border: `1px dashed ${WT.borderHover}`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="plus" size={15} color={WT.accent} />Adicionar equipamento</button>}
+            : <button type="button" onClick={() => setShowEquip(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: WT.rM, border: `1px dashed ${WT.borderHover}`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="plus" size={15} color={WT.accent} />Adicionar equipamento</button>)}
         </Section>
 
         <Section icon="banknote" title="Pagamento">
-          <WToggle checked={form.plano} onChange={v => upd({ plano: v })} label="É plano / convênio?" />
-          <div style={{ display: 'grid', gridTemplateColumns: form.plano ? '1fr' : (showTabela ? '1fr 1fr' : '1fr'), gap: 12 }}>
-            {form.plano && <WSelect label="Convênio" required value={form.convenio} onChange={v => upd({ convenio: v })} options={CONVENIOS.filter(c => c !== 'Particular')} error={errors.convenio} size="l" />}
-            {!form.plano && showTabela && <WSelect label="Tabela particular" required={reqTabela} value={form.tabela} onChange={v => upd({ tabela: v })} options={TABELA_OPTS} error={errors.tabela} size="l" />}
-            {!form.plano && <WInput label="Valor" required value={form.valor} onChange={v => upd({ valor: v })} prefixIcon="banknote" error={errors.valor} size="l" />}
+          {!window.__mvp && <WToggle checked={form.plano} onChange={v => upd({ plano: v })} label="É plano / convênio?" />}
+          <div style={{ display: 'grid', gridTemplateColumns: (!window.__mvp && form.plano) ? '1fr' : (showTabela ? '1fr 1fr' : '1fr'), gap: 12 }}>
+            {!window.__mvp && form.plano && <WSelect label="Convênio" required value={form.convenio} onChange={v => upd({ convenio: v })} options={CONVENIOS.filter(c => c !== 'Particular')} error={errors.convenio} size="l" />}
+            {(window.__mvp || !form.plano) && showTabela && <WSelect label="Tabela particular" required={reqTabela} value={form.tabela} onChange={v => upd({ tabela: v })} options={TABELA_OPTS} error={errors.tabela} size="l" />}
+            {(window.__mvp || !form.plano) && <WInput label="Valor" required value={form.valor} onChange={v => upd({ valor: v })} prefixIcon="banknote" error={errors.valor} size="l" />}
           </div>
-          {form.plano && <WInput label="Carteirinha / matrícula" value={form.paciente.Matricula1 || ''} onChange={v => updPac('Matricula1', v)} required={requiredSet.has('Matricula1')} error={errors.pac_Matricula1} size="l" />}
+          {!window.__mvp && form.plano && <WInput label="Carteirinha / matrícula" value={form.paciente.Matricula1 || ''} onChange={v => updPac('Matricula1', v)} required={requiredSet.has('Matricula1')} error={errors.pac_Matricula1} size="l" />}
         </Section>
 
         <Section icon="git-branch" title="Origem & observações">
@@ -409,7 +452,6 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: 14, borderTop: `1px solid ${WT.border}`, background: WT.raised }}>
         <WButton variant="default" label="Cancelar" onClick={onCancel} />
         <span style={{ flex: 1 }} />
-        <WButton variant="secondary" leadingIcon="user-check" label="Salvar e check-in" onClick={() => submit(true)} />
         <WButton variant="primary" leadingIcon="check" label="Salvar" onClick={() => submit(false)} />
       </div>
     </div>

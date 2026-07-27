@@ -16,11 +16,11 @@ const NOW_MIN_D = _NOW.getHours() * 60 + _NOW.getMinutes();
 
 // ---- Professionals ----------------------------------------------------------
 const PROS = [
-  { id: 'p1', name: 'Dra. Renata Alves',   short: 'R. Alves',   initials: 'RA', spec: 'Dermatologia',  specs: ['Dermatologia', 'Tricologia'], room: 'Consultório 1 · Pardal',     unit: 'Unidade Centro',   color: '#007c68', doctoralia: true },
-  { id: 'p2', name: 'Dr. Bruno Tavares',   short: 'B. Tavares', initials: 'BT', spec: 'Ortopedia',     specs: ['Ortopedia', 'Traumatologia', 'Medicina Esportiva'], room: 'Consultório 2 · Bem-te-vi',  unit: 'Unidade Centro',   color: '#1b5ea9' },
-  { id: 'p3', name: 'Dra. Camila Souza',   short: 'C. Souza',   initials: 'CS', spec: 'Cardiologia',   room: 'Consultório 3 · Sabiá',      unit: 'Unidade Centro',   color: '#a23a7a', doctoralia: true },
-  { id: 'p4', name: 'Dr. Felipe Moreira',  short: 'F. Moreira', initials: 'FM', spec: 'Clínico Geral',  room: 'Consultório 4 · Tucano',     unit: 'Unidade Zona Sul', color: '#b06400' },
-  { id: 'p5', name: 'Dra. Patrícia Lima',  short: 'P. Lima',    initials: 'PL', spec: 'Pediatria',     room: 'Consultório 5 · Colibri',    unit: 'Unidade Zona Sul', color: '#0e7aa0', doctoralia: true },
+  { id: 'p1', name: 'Dra. Renata Alves',   short: 'Renata A.',   initials: 'RA', spec: 'Dermatologia',  specs: ['Dermatologia', 'Tricologia'], room: 'Consultório 1 · Pardal',     unit: 'Unidade Centro',   color: '#007c68', doctoralia: true },
+  { id: 'p2', name: 'Dr. Bruno Tavares',   short: 'Bruno T.', initials: 'BT', spec: 'Ortopedia',     specs: ['Ortopedia', 'Traumatologia', 'Medicina Esportiva'], room: 'Consultório 2 · Bem-te-vi',  unit: 'Unidade Centro',   color: '#1b5ea9' },
+  { id: 'p3', name: 'Dra. Camila Souza',   short: 'Camila S.',   initials: 'CS', spec: 'Cardiologia',   room: 'Consultório 3 · Sabiá',      unit: 'Unidade Centro',   color: '#a23a7a', doctoralia: true },
+  { id: 'p4', name: 'Dr. Felipe Moreira',  short: 'Felipe M.', initials: 'FM', spec: 'Clínico Geral',  room: 'Consultório 4 · Tucano',     unit: 'Unidade Zona Sul', color: '#b06400' },
+  { id: 'p5', name: 'Dra. Patrícia Lima',  short: 'Patrícia L.',    initials: 'PL', spec: 'Pediatria',     room: 'Consultório 5 · Colibri',    unit: 'Unidade Zona Sul', color: '#0e7aa0', doctoralia: true },
 ];
 // especialidades de um profissional (array) + label "primeira +X"
 const specsOf = pro => (pro && pro.specs && pro.specs.length ? pro.specs : (pro && pro.spec ? [pro.spec] : []));
@@ -65,14 +65,14 @@ const GRADES = [
   { pro: 'p1', days: [1, 2, 3, 4, 5], start: '13:00', end: '18:00', slotMin: 45, color: '#7b3fb0',  label: 'Procedimentos', procs: ['mapa', 'infil', 'usg'], convenios: ['Particular', 'Unimed'], room: 'Consultório 2 · Bem-te-vi' },
   { pro: 'p1', days: [6],             start: '08:00', end: '12:00', slotMin: 30, color: GREEN,      label: 'Consultas',     procs: ['derm', 'retorno'], convenios: ['Particular', 'Unimed'], room: 'Consultório 1 · Pardal', doctoralia: true },
   // Dr. Bruno — dois turnos verdes
-  { pro: 'p2', days: [1, 2, 3, 4, 5], start: '08:00', end: '13:30', slotMin: 30, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno'], convenios: ['Particular', 'SulAmérica'], intervals: [{ start: '12:00', end: '12:30', label: 'Almoço' }] },
-  { pro: 'p2', days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', slotMin: 30, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno', 'infil'], convenios: ['Particular', 'SulAmérica'] },
+  { pro: 'p2', days: [1, 2, 3, 4, 5], start: '08:00', end: '13:30', slotMin: 60, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno'], convenios: ['Particular', 'SulAmérica'], intervals: [{ start: '12:00', end: '12:30', label: 'Almoço' }] },
+  { pro: 'p2', days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', slotMin: 60, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno', 'infil'], convenios: ['Particular', 'SulAmérica'] },
   // Dra. Camila — dia todo, convênios limitados
-  { pro: 'p3', days: [1, 2, 3, 4, 5], start: '08:00', end: '17:00', slotMin: 40, color: '#0e7aa0',  label: 'Cardiologia',   procs: ['cardio', 'retorno', 'ecg', 'tele'], convenios: ['Particular', 'Unimed', 'Bradesco Saúde'], intervals: [{ start: '12:00', end: '13:00', label: 'Almoço' }], doctoralia: true },
+  { pro: 'p3', days: [1, 2, 3, 4, 5], start: '08:00', end: '17:00', slotMin: 15, color: '#0e7aa0',  label: 'Cardiologia',   procs: ['cardio', 'retorno', 'ecg', 'tele'], convenios: ['Particular', 'Unimed', 'Bradesco Saúde'], intervals: [{ start: '12:00', end: '13:00', label: 'Almoço' }], doctoralia: true },
   // Dr. Felipe — clínico
-  { pro: 'p4', days: [1, 2, 3, 4, 5], start: '08:00', end: '15:30', slotMin: 30, color: GREEN,      label: 'Clínica geral', procs: ['clinico', 'retorno', 'tele'], convenios: ['Particular', 'Amil'], intervals: [{ start: '12:00', end: '13:00', label: 'Almoço' }] },
+  { pro: 'p4', days: [1, 2, 3, 4, 5], start: '08:00', end: '15:30', slotMin: 15, color: GREEN,      label: 'Clínica geral', procs: ['clinico', 'retorno', 'tele'], convenios: ['Particular', 'Amil'], intervals: [{ start: '12:00', end: '13:00', label: 'Almoço' }] },
   // Dra. Patrícia — manhã consultas, tarde vacinação
-  { pro: 'p5', days: [1, 2, 3, 4, 5], start: '08:00', end: '12:00', slotMin: 30, color: GREEN,      label: 'Consultas',     procs: ['pedia', 'retorno'], convenios: ['Particular', 'Bradesco Saúde'], doctoralia: true },
+  { pro: 'p5', days: [1, 2, 3, 4, 5], start: '08:00', end: '12:00', slotMin: 10, color: GREEN,      label: 'Consultas',     procs: ['pedia', 'retorno'], convenios: ['Particular', 'Bradesco Saúde'], doctoralia: true },
   { pro: 'p5', days: [2, 4],          start: '14:00', end: '16:00', slotMin: 15, color: '#b06400',  label: 'Vacinação',     procs: ['vacina'], convenios: ['Particular', 'Bradesco Saúde'] },
 ];
 function gradesFor(proId, iso) {
@@ -103,19 +103,20 @@ function gradeAccepts(g, { procId, conv } = {}) {
 function dayAcceptsCond(proId, iso, cond) { return gradesFor(proId, iso).some(g => gradeAccepts(g, cond)); }
 
 // ---- Procedures (drive duration, type color, base price) --------------------
+// color = cor própria do procedimento (usada quando "Colorir agendamentos pela cor do procedimento" está ativo)
 const PROCS = {
-  derm:   { id: 'derm',   name: 'Consulta Dermatologia',  type: 'consulta',     dur: 30, price: 250 },
-  orto:   { id: 'orto',   name: 'Consulta Ortopedia',     type: 'consulta',     dur: 30, price: 280 },
-  cardio: { id: 'cardio', name: 'Consulta Cardiologia',   type: 'consulta',     dur: 40, price: 350 },
-  clinico:{ id: 'clinico',name: 'Consulta Clínico Geral', type: 'consulta',     dur: 30, price: 200 },
-  pedia:  { id: 'pedia',  name: 'Consulta Pediatria',     type: 'consulta',     dur: 30, price: 220 },
-  retorno:{ id: 'retorno',name: 'Retorno',                type: 'retorno',      dur: 15, price: 0   },
-  ecg:    { id: 'ecg',    name: 'Eletrocardiograma',      type: 'exame',        dur: 20, price: 120, reqEquip: 'e2' },
-  usg:    { id: 'usg',    name: 'Ultrassonografia',       type: 'exame',        dur: 30, price: 180, reqEquip: 'e1' },
-  mapa:   { id: 'mapa',   name: 'Mapeamento de pele',     type: 'procedimento', dur: 45, price: 400 },
-  infil:  { id: 'infil',  name: 'Infiltração',            type: 'procedimento', dur: 30, price: 350 },
-  vacina: { id: 'vacina', name: 'Vacinação',              type: 'procedimento', dur: 15, price: 90  },
-  tele:   { id: 'tele',   name: 'Teleconsulta',           type: 'telemedicina', dur: 20, price: 150 },
+  derm:   { id: 'derm',   name: 'Consulta Dermatologia',  type: 'consulta',     dur: 30, price: 250, color: '#1b5ea9' },
+  orto:   { id: 'orto',   name: 'Consulta Ortopedia',     type: 'consulta',     dur: 30, price: 280, color: '#7b3fb0' },
+  cardio: { id: 'cardio', name: 'Consulta Cardiologia',   type: 'consulta',     dur: 40, price: 350, color: '#b0342a' },
+  clinico:{ id: 'clinico',name: 'Consulta Clínico Geral', type: 'consulta',     dur: 30, price: 200, color: '#0e7aa0' },
+  pedia:  { id: 'pedia',  name: 'Consulta Pediatria',     type: 'consulta',     dur: 30, price: 220, color: '#a23a7a' },
+  retorno:{ id: 'retorno',name: 'Retorno',                type: 'retorno',      dur: 15, price: 0,   color: '#007c68' },
+  ecg:    { id: 'ecg',    name: 'Eletrocardiograma',      type: 'exame',        dur: 20, price: 120, reqEquip: 'e2', color: '#865200' },
+  usg:    { id: 'usg',    name: 'Ultrassonografia',       type: 'exame',        dur: 30, price: 180, reqEquip: 'e1', color: '#5a4bbf' },
+  mapa:   { id: 'mapa',   name: 'Mapeamento de pele',     type: 'procedimento', dur: 45, price: 400, color: '#8a5a14' },
+  infil:  { id: 'infil',  name: 'Infiltração',            type: 'procedimento', dur: 30, price: 350, color: '#0f766e' },
+  vacina: { id: 'vacina', name: 'Vacinação',              type: 'procedimento', dur: 15, price: 90,  color: '#b06400' },
+  tele:   { id: 'tele',   name: 'Teleconsulta',           type: 'telemedicina', dur: 20, price: 150, color: '#2563a8' },
 };
 const PROC_LIST = Object.values(PROCS);
 
@@ -134,8 +135,11 @@ const PRIORITIES = {
   idoso:        { label: 'Idoso 60+',               icon: 'person-standing' },
   gestante:     { label: 'Gestante',                icon: 'baby' },
 };
+// cpf = exibido na busca quando "Mostrar CPF na busca de pacientes" está ativo
+// cardExp = validade da carteirinha do convênio (vencida → bloqueio/aviso ao agendar)
+// noShows = faltas registradas (regra de pagamento antecipado)
 const PATIENTS = [
-  { id: 'pt1',  name: 'Ana Beatriz Oliveira',   phone: '(11) 98472-1130', birth: '1989-03-12', conv: 'Unimed' },
+  { id: 'pt1',  name: 'Ana Beatriz Oliveira',   phone: '(11) 98472-1130', birth: '1989-03-12', conv: 'Unimed', cpf: '184.330.276-01' },
   { id: 'pt2',  name: 'Carlos Eduardo Lima',    phone: '(11) 99641-8820', birth: '1976-11-02', conv: 'Particular' },
   { id: 'pt3',  name: 'Mariana Silva Costa',    phone: '(11) 98155-3074', birth: '1994-07-28', conv: 'Bradesco Saúde' },
   { id: 'pt4',  name: 'Larissa Gomes',          phone: '(11) 99022-6651', birth: '2001-01-19', conv: 'Amil', firstVisit: true },
@@ -150,9 +154,23 @@ const PATIENTS = [
   { id: 'pt13', name: 'Patrícia Nunes',         phone: '(11) 97155-8806', birth: '1987-09-21', conv: 'Bradesco Saúde' },
   { id: 'pt14', name: 'Lucas Pereira Ramos',    phone: '(11) 99841-2237', birth: '2018-03-03', conv: 'Unimed', priority: 'crianca_colo' },
   { id: 'pt15', name: 'Sofia Cardoso',          phone: '(11) 98477-6610', birth: '2020-11-09', conv: 'Particular', firstVisit: true },
-  { id: 'pt16', name: 'Eduardo Nogueira',       phone: '(11) 99230-4471', birth: '1959-07-15', conv: 'Amil', priority: 'cardiaco' },
+  { id: 'pt16', name: 'Eduardo Nogueira',       phone: '(11) 99230-4471', birth: '1959-07-15', conv: 'Amil', priority: 'cardiaco', cpf: '905.223.118-40' },
+  // homônimos — demonstram o CPF na busca
+  { id: 'pt17', name: 'Maria Silva Santos',     phone: '(11) 98311-7742', birth: '1981-04-09', conv: 'Particular', cpf: '342.118.907-55' },
+  { id: 'pt18', name: 'Maria Silva Santos',     phone: '(11) 99657-2093', birth: '1997-12-01', conv: 'Unimed',     cpf: '118.554.230-71' },
+  // carteirinha de convênio vencida
+  { id: 'pt19', name: 'Renata Alves Prado',     phone: '(11) 98120-6634', birth: '1986-02-17', conv: 'Unimed', cpf: '772.409.185-32', cardExp: '12/05/2026' },
+  // três faltas registradas (pagamento antecipado / bloqueio de retorno)
+  { id: 'pt20', name: 'Otávio Bezerra Lima',    phone: '(11) 99744-8120', birth: '1974-08-24', conv: 'Particular', cpf: '506.813.744-09', noShows: 3 },
 ];
 const patientById = id => PATIENTS.find(p => p.id === id);
+// CPF do cadastro (gerado de forma determinística quando o mock não traz um)
+function cpfOf(p) {
+  if (!p) return '';
+  if (p.cpf) return p.cpf;
+  const s = String(10000000000 + (_nseed('cpf' + p.id) % 89999999999));
+  return `${s.slice(0, 3)}.${s.slice(3, 6)}.${s.slice(6, 9)}-${s.slice(9, 11)}`;
+}
 
 // ---- Appointments (busy realistic day) --------------------------------------
 // a = { id, pro, pt, proc, start("HH:MM"), status, conv, plano(bool), date, fitIn, note, equip, channel }
@@ -173,7 +191,7 @@ const A = (pro, pt, proc, start, status, conv, opts = {}) => {
     price: opts.price != null ? opts.price : sumPrice,
     fitIn: !!opts.fitIn, note: opts.note || null, equip: opts.equip || null,
     channel: opts.channel || 'Telefone', room: opts.room || null,
-    reason: opts.reason || null,
+    reason: opts.reason || null, paid: !!opts.paid,
   };
 };
 
@@ -202,7 +220,6 @@ function _genBlocks() {
   while (hol.getDay() !== 5) hol.setDate(hol.getDate() + 1);
   hol.setDate(hol.getDate() + 14);
   if (hol.getMonth() !== m) hol.setDate(hol.getDate() - 7);
-  B({ scope: 'clinica', pro: 0, units: [], start: '00:00', end: '23:59', date: _isoOf(hol), titulo: 'Feriado — clínica fechada', tipo: 'feriado', allDay: true });
   return out;
 }
 const SEED_BLOCKS = _genBlocks();
@@ -278,7 +295,7 @@ function _apptFromSlot(proId, iso, slot, statusOverride, extraOpts) {
   const proc = PROCS[procId] || {};
   const pt = PATIENTS[(seed >>> 3) % PATIENTS.length].id;
   const conv = g.convenios ? g.convenios[seed % g.convenios.length] : undefined;
-  const opts = { date: iso, ...(extraOpts || {}) };
+  const opts = { date: iso, dur: step, ...(extraOpts || {}) };
   if (proc.reqEquip) opts.equip = proc.reqEquip;
   const status = statusOverride || _statusFor(iso, s, proc.dur || step, seed);
   return A(proId, pt, procId, hhmm, status, conv, opts);
@@ -310,7 +327,8 @@ function _genMonthAppts() {
   });
   return out;
 }
-// Alguns casos "ricos" no dia de hoje: multi-procedimento e encaixes.
+// Casos "ricos" no dia de hoje: apenas a Dra. Camila (p3) tem mais de um
+// agendamento no mesmo horário (paralelo + encaixe). Demais médicos: um por slot.
 function _todayFlavor() {
   const mk = (pro, pt, proc, start, conv, opts = {}) => {
     const ids = Array.isArray(proc) ? proc : [proc];
@@ -318,11 +336,14 @@ function _todayFlavor() {
     const seed = _nseed('flav' + pro + start);
     return A(pro, pt, proc, start, _statusFor(TODAY, _hm(start), dur, seed), conv, { date: TODAY, ...opts });
   };
+  // Camila (p3), grade de 15 min: dois agendamentos no mesmo slot das 10:00
   return [
-    mk('p1', 'pt3', ['derm', 'mapa'], '09:30', 'Particular'),
-    mk('p3', 'pt5', ['cardio', 'ecg', 'retorno'], '10:30', 'Particular'),
-    mk('p2', 'pt16', 'retorno', '14:30', 'Amil', { fitIn: true, reason: 'Encaixe — dor aguda' }),
-    mk('p1', 'pt5', 'retorno', '10:30', 'Particular', { fitIn: true, reason: 'Encaixe — paciente em viagem' }),
+    mk('p3', 'pt5', 'retorno', '10:00', 'Particular'),
+    mk('p3', 'pt16', 'retorno', '10:00', 'Amil', { fitIn: true, reason: 'Encaixe — dor aguda' }),
+    // casos de apoio às Configurações da Agenda (status fixo p/ serem sempre demonstráveis)
+    A('p2', 'pt20', 'retorno', '15:00', 'marcado', 'Particular', { date: TODAY }),          // retorno de paciente faltoso
+    A('p1', 'pt19', 'derm', '09:00', 'marcado', 'Unimed', { date: TODAY }),                  // carteirinha vencida
+    A('p4', 'pt3', 'clinico', '11:00', 'marcado', 'Particular', { date: TODAY, paid: true, price: 180 }), // atendimento já pago
   ];
 }
 
@@ -452,38 +473,82 @@ function fmtNotifWhen(d) {
   return `${pfx} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-// ---- Trilha de alterações do agendamento (histórico) -------------------------
-// Mock determinístico no espírito de apptNotifications: eventos derivados do
-// status atual e do "agora". Cada entrada: { icon, color, title, detail, actor, when }.
-const _AUDIT_ACTORS = ['Recepção · Juliana', 'Recepção · Marcos', 'Central de agendamento', 'Portal do paciente'];
+// ---- Trilha de alterações (audit log) de um agendamento --------------------
+// Determinístico a partir do id/estado do agendamento. Retorna entradas
+// ordenadas do mais recente → mais antigo (ideal p/ linha do tempo descendente).
+const _AUDIT_ACTORS = ['Ana Paula (Recepção)', 'Carla Mendes (Recepção)', 'Rafael Lima (Recepção)', 'Juliana Prado (Recepção)'];
 function apptAuditLog(a) {
   if (!a) return [];
   const seed = _nseed('audit' + a.id);
+  const pro = PROS.find(p => p.id === a.pro) || {};
+  const proName = pro.name ? `Dr(a). ${pro.name.replace(/^(Dra?\.?|Dr\.?)\s*/i, '')}` : 'Profissional';
+  const recep = _AUDIT_ACTORS[seed % _AUDIT_ACTORS.length];
+  const chLabel = { whatsapp: 'WhatsApp', sms: 'SMS', email: 'e-mail' }[apptChannel(a)] || 'WhatsApp';
   const start = apptDateTime(a);
-  const endDT = new Date(start.getTime() + (a.dur || 30) * 60000);
-  const actor = _AUDIT_ACTORS[seed % _AUDIT_ACTORS.length];
-  const proName = (PROS.find(p => p.id === a.pro) || {}).name;
-  const created = new Date(start.getTime() - (3 + (seed % 18)) * 86400000);
-  created.setHours(8 + (seed % 9), (seed >>> 3) % 60, 0, 0);
-  const out = [{ icon: 'calendar-plus', color: WT.info, title: 'Agendamento criado', detail: `${apptProcLabel(a)} · via ${a.channel || 'Telefone'}`, actor, when: created }];
-  const push = (icon, color, title, detail, when, act) => out.push({ icon, color, title, detail: detail || null, actor: act || actor, when });
-  if (seed % 5 === 0) push('pencil', WT.fg2, 'Procedimento alterado', apptProcLabel(a), new Date(created.getTime() + (26 + seed % 40) * 3600000));
-  if (a.status === 'remarcado') push('calendar-clock', (STATUS.remarcado || {}).dot || WT.fg, 'Horário remarcado', a.reason || null, new Date(start.getTime() - (1 + seed % 5) * 86400000));
-  if (['confirmado', 'aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) {
-    const ch = (NOTIF_CHANNELS[apptChannel(a)] || {}).label || 'WhatsApp';
-    push('check-check', WT.success, 'Presença confirmada pelo paciente', `via ${ch}`, new Date(start.getTime() - (18 + seed % 6) * 3600000), 'Paciente');
+  const D = minsBefore => new Date(start.getTime() - minsBefore * 60000);
+  const dayMin = 1440;
+  const out = [];
+  // criação (2–12 dias antes)
+  const daysAgo = 2 + (seed % 11);
+  const online = seed % 3 === 0;
+  out.push({
+    icon: online ? 'globe' : 'calendar-plus', color: WT.accent,
+    title: 'Agendamento criado', when: D(daysAgo * dayMin + (seed % 300)),
+    actor: online ? 'Doctoralia (agendamento online)' : recep,
+    detail: `${proName} · ${a.start} · ${(PROCS[a.proc] || {}).name || 'Procedimento'}`,
+  });
+  // confirmação de notificação
+  out.push({
+    icon: 'send', color: WT.info,
+    title: `Confirmação enviada por ${chLabel}`, when: D(daysAgo * dayMin - 120),
+    actor: 'Sistema', detail: 'Mensagem automática de confirmação de horário.',
+  });
+  // remarcação de horário (sempre para status remarcado; às vezes p/ outros)
+  if (a.status === 'remarcado' || seed % 4 === 0) {
+    const oldHM = fmtMin((toMin(a.start) - 30 + 24 * 60) % (24 * 60));
+    const cleanReason = (a.reason || '').replace(/\s*·?\s*era\s+\d{1,2}:\d{2}\s*$/i, '').trim();
+    out.push({
+      icon: 'calendar-clock', color: WT.warning,
+      title: 'Horário remarcado', when: D((1 + (seed % 3)) * dayMin),
+      actor: seed % 2 ? `Paciente (${chLabel})` : recep,
+      detail: `${oldHM} → ${a.start}${cleanReason ? ' · ' + cleanReason : ''}`,
+    });
   }
-  if (['aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) push('armchair', WT.warning, 'Check-in realizado', null, new Date(start.getTime() - (4 + seed % 9) * 60000));
-  if (['em_atendimento', 'finalizado'].includes(a.status)) push('stethoscope', WT.accent, 'Atendimento iniciado', null, new Date(start.getTime() + (seed % 6) * 60000), proName);
-  if (a.status === 'finalizado') push('check-check', WT.success, 'Atendimento finalizado', null, new Date(endDT.getTime() + (seed % 10) * 60000), proName);
-  if (a.status === 'faltou') push('user-x', WT.danger, 'Marcado como falta', null, new Date(endDT.getTime() + 30 * 60000));
-  if (a.status === 'cancelado') push('x', WT.muted, 'Agendamento cancelado', a.reason || null, new Date(Math.min(start.getTime() - (2 + seed % 20) * 3600000, NOW_DT.getTime())));
-  return out.sort((x, y) => x.when - y.when);
+  // troca de procedimento (ocasional)
+  if (seed % 5 === 0) {
+    out.push({
+      icon: 'replace', color: WT.fg2,
+      title: 'Procedimento alterado', when: D((1 + (seed % 2)) * dayMin + 60),
+      actor: recep, detail: `Retorno → ${(PROCS[a.proc] || {}).name || 'Procedimento'}`,
+    });
+  }
+  // confirmação de presença
+  if (['confirmado', 'aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) {
+    out.push({ icon: 'user-check', color: WT.success, title: 'Presença confirmada pelo paciente', when: D(dayMin - 200), actor: `Paciente (${chLabel})`, detail: 'Respondeu "Sim" ao lembrete de confirmação.' });
+  }
+  // check-in
+  if (['aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) {
+    out.push({ icon: 'log-in', color: STATUS.aguardando.fg, title: 'Check-in realizado', when: D(20), actor: recep, detail: 'Paciente na sala de espera.' });
+  }
+  if (['em_atendimento', 'finalizado'].includes(a.status)) {
+    out.push({ icon: 'stethoscope', color: STATUS.em_atendimento.fg, title: 'Atendimento iniciado', when: D(-5), actor: proName, detail: '' });
+  }
+  if (a.status === 'finalizado') {
+    out.push({ icon: 'check-check', color: STATUS.finalizado.fg, title: 'Atendimento finalizado', when: D(-(a.dur || 30)), actor: proName, detail: '' });
+  }
+  if (a.status === 'faltou') {
+    out.push({ icon: 'user-x', color: STATUS.faltou.fg, title: 'Marcado como falta', when: D(-15), actor: recep, detail: 'Paciente não compareceu.' });
+  }
+  if (a.status === 'cancelado') {
+    out.push({ icon: 'x-circle', color: STATUS.cancelado.dot, title: 'Agendamento cancelado', when: D((seed % 2) * dayMin + 90), actor: seed % 2 ? `Paciente (${chLabel})` : recep, detail: a.reason || 'Cancelado' });
+  }
+  return out.sort((x, y) => y.when - x.when);
 }
 
 Object.assign(window, {
+  apptAuditLog,
   TODAY, WEEK_START, PROS, specsOf, specLabel, proHasSpec, EQUIP, ROOMS, effectiveRoom, roomShort, GRADES, gradesFor, gradeAt, gradeSlotAt, gradeRoomAt, proRoomsOn, gradeAccepts, dayAcceptsCond, PROCS, PROC_LIST, CONVENIOS, UNITS, CHANNELS,
-  PATIENTS, patientById, ALL_APPTS, SEED_BLOCKS, blockOnDate, blockCoversPro, recurLabel, blockEditable, DOW_ABBR, PATIENT_FIELDS, CLINIC_CONFIGS, PRIORITIES,
+  PATIENTS, patientById, cpfOf, ALL_APPTS, SEED_BLOCKS, blockOnDate, blockCoversPro, recurLabel, blockEditable, DOW_ABBR, PATIENT_FIELDS, CLINIC_CONFIGS, PRIORITIES,
   apptProcIds, apptProcList, apptDurSum, apptPriceSum, apptProcLabel,
-  NOTIF_CHANNELS, NOTIF_STATUS, apptNotifications, notifSummary, fmtNotifWhen, apptAuditLog,
+  NOTIF_CHANNELS, NOTIF_STATUS, apptNotifications, notifSummary, fmtNotifWhen,
 });

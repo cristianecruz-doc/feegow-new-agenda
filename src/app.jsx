@@ -22,26 +22,46 @@ const uid = () => 'n' + Math.random().toString(36).slice(2, 9);
 // Tweaks (demo). Idioma é uma camada só para demonstração a clientes.
 const TWEAK_DEFAULTS = /*EDITMODE*/{
   lang: 'pt',
+  edition: 'final',
 }/*EDITMODE-END*/;
 
 function App() {
   applyAccent(ACCENT);
   const [tw, setTweak] = useTweaks(TWEAK_DEFAULTS);
   React.useLayoutEffect(() => { if (window.I18N) window.I18N.set(tw.lang); });
+  const mvp = tw.edition === 'mvp';
+  window.__mvp = mvp;
+  // Configurações da Agenda (11 chaves legadas) — persistidas em localStorage
+  const [cfg, setCfgState] = React.useState(cfgLoad);
+  window.__cfg = cfg;
+  const setCfg = patch => setCfgState(c => { const n = { ...c, ...patch }; cfgSave(n); return n; });
+  const resetSection = keys => setCfgState(c => { const n = { ...c }; keys.forEach(k => { n[k] = CFG_DEFAULTS[k]; if (k === 'AlterarStatusAgendamento') n.AlterarStatusAgendamentoPara = CFG_DEFAULTS.AlterarStatusAgendamentoPara; }); cfgSave(n); flash('Seção restaurada para o padrão'); return n; });
+  // MVP: sem visão mensal/salas/programação/equipamentos → cai para Dia; limpa filtros de convênio/sala
+  React.useEffect(() => {
+    if (!mvp) return;
+    setApp(s => {
+      const patch = {};
+      if (['mes', 'equip', 'sala', 'programacao'].includes(s.view)) patch.view = 'dia';
+      if ((s.filters.conv || []).length || (s.filters.room || []).length) patch.filters = { ...s.filters, conv: [], room: [] };
+      return Object.keys(patch).length ? { ...s, ...patch } : s;
+    });
+  }, [mvp]);
 
 
   const [appts, setAppts] = React.useState(() => ALL_APPTS.map(a => ({ ...a })));
   const [blocks, setBlocks] = React.useState(() => SEED_BLOCKS.map(b => ({ ...b })));
   const [app, setApp] = React.useState({
     view: 'dia', date: TODAY, dayPro: 'p1', extraResources: [],
-    filters: { pros: null, spec: [], conv: [], unit: [], room: [] }, freeOnly: false,
+    filters: { pros: null, spec: [], conv: [], unit: [], room: [], proc: [] }, freeOnly: false,
     sidebarCollapsed: false,
     // Seletor de agendas fixo na barra lateral (abaixo do status)
     agendasPlacement: 'sidebar',
     // Configurações de visualização do usuário
-    cardStyle: 'typebar', density: 'comfortable',
+    cardStyle: 'filled', density: 'comfortable',
     // Sinalizadores exibidos nos cards
     showPriorityFlags: false, showNewPatientFlag: false,
+    // Página ativa do módulo ('agenda' | 'agenda-options')
+    page: 'agenda',
   });
   const set = patch => setApp(s => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }));
 
@@ -52,7 +72,7 @@ function App() {
   const [blockM, setBlockM] = React.useState(null);     // {ctx}
   const [blockPick, setBlockPick] = React.useState(null); // [blocks] — chooser na semanal
   const [draft, setDraft] = React.useState(null); // {colId, time, dur} — placeholder do agendamento em criação
-  const [resched, setResched] = React.useState(null);   // {a}
+  const [reschedule, setReschedule] = React.useState(null);   // { a, prevFreeOnly } — modo remarcação (fluxo aberto)
   const [toast, setToast] = React.useState(null);
   const [width, setWidth] = React.useState(window.innerWidth);
   React.useEffect(() => { const r = () => setWidth(window.innerWidth); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
@@ -65,7 +85,20 @@ function App() {
   const state = { ...app, timeStart, timeEnd };
   // Prefs de sinalizadores lidas pelos cards (apptFlags)
   window.__cardFlags = { priority: app.showPriorityFlags !== false, newPatient: app.showNewPatientFlag !== false };
-  const filtered = filterAppts(appts, app.filters);
+  // condição da remarcação em andamento: só destaca horários livres onde o médico atende o convênio + procedimentos
+  window.__rxCond = reschedule ? { conv: reschedule.a.conv || 'Particular', procIds: (reschedule.a.procs && reschedule.a.procs.length ? reschedule.a.procs : (reschedule.a.proc ? [reschedule.a.proc] : [])) } : null;
+  // filtro de grade ativo (procedimento / convênio): esconde blocos de horário onde não é permitido
+  window.__gradeFilter = ((app.filters.proc || []).length || (app.filters.conv || []).length) ? { proc: app.filters.proc || [], conv: app.filters.conv || [] } : null;
+  // status alterável direto pelo card (smart tag)
+  window.__onSetStatus = (a, status) => {
+    if (status === a.status) return;
+    if (status === 'cancelado') { setCtxCard(null); setCancel({ a }); return; }
+    const prev = a.status;
+    setAppts(s => s.map(x => x.id === a.id ? { ...x, status } : x));
+    const st = STATUS[status] || {};
+    flash(`Status: ${st.label || status}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? { ...x, status: prev } : x)); setToast(null); } } });
+  };
+  const filtered = filterAppts(appts, app.filters).filter(a => !cfgHiddenStatuses().includes(a.status));
 
   // ---- slot resolution -----------------------------------------------------
   function resolveSlot(colId) {
@@ -108,10 +141,28 @@ function App() {
     openBooking(base);
   }
 
+  // escolhe o profissional com horário vago no slot clicado (preferência p/ quem tem grade e sem conflito)
+  function pickFreePro(date, time, candidateIds) {
+    const cands = (candidateIds && candidateIds.length) ? candidateIds : PROS.map(p => p.id);
+    const m = toMin(time);
+    const hasGrade = id => !!gradeAt(id, date, time);
+    const busy = id => appts.some(a => a.pro === id && a.date === date && a.status !== 'cancelado' && m >= toMin(a.start) && m < toMin(a.start) + (a.dur || 0));
+    return cands.find(id => hasGrade(id) && !busy(id))   // grade + livre
+      || cands.find(id => hasGrade(id))                   // tem grade (mesmo ocupado)
+      || cands[0];
+  }
+
   function onSlotClick(colId, min, rect) {
+    if (reschedule) { applyReschedule(colId, min); return; }
     const slot = resolveSlot(colId);
     const ctx = { ...slot, time: fmtMin(min) };
-    setDraft({ colId, time: ctx.time, dur: gradeSlotAt(slot.proId, slot.date, ctx.time) || 30 });
+    if (state.view === 'semana') {
+      const candidates = (agendaSelection(state, set).selected || []).filter(r => r.kind === 'pro').map(r => r.id);
+      ctx.proOptions = candidates.length ? candidates : PROS.map(p => p.id);
+      ctx.proId = pickFreePro(slot.date, ctx.time, ctx.proOptions);
+      ctx.pickPro = true;
+    }
+    setDraft({ colId, time: ctx.time, dur: gradeSlotAt(ctx.proId, slot.date, ctx.time) || 30 });
     if (BOOKING_FLOW === 'two-tier') setQuick({ ctx, rect });
     else openBooking(ctx);
   }
@@ -140,19 +191,81 @@ function App() {
   }
   function doCancel(a) { setCtxCard(null); setCancel({ a }); }
   function confirmCancel(info) {
-    setAppts(s => s.map(x => x.id === cancel.a.id ? { ...x, status: 'cancelado', reason: info.label } : x));
-    setCancel(null); flash('Agendamento cancelado · horário liberado', { tone: 'danger' });
+    const a = cancel.a;
+    setAppts(s => s.map(x => x.id === a.id ? { ...x, status: 'cancelado', reason: info.label } : x));
+    setCancel(null);
+    if (a.paid && cfgGet('ContasAPagarCancelamento')) {
+      flash(`Agendamento cancelado · conta a pagar de ${brl(a.price || 0)} criada no financeiro`, { tone: 'danger', dur: 4200 });
+    } else flash('Agendamento cancelado · horário liberado', { tone: 'danger' });
   }
-  function doReschedule(a) { setCtxCard(null); setResched({ a }); }
-  function confirmReschedule(target) {
-    setAppts(s => s.map(x => x.id === resched.a.id ? { ...x, pro: target.pro, date: target.date, start: target.time } : x));
-    setResched(null); flash('Agendamento remarcado');
+  function doReschedule(a) {
+    // Configuração: bloquear remarcação de retorno de paciente faltoso
+    const pt = patientById(a.pt) || {};
+    const isRet = apptProcIds(a).includes('retorno');
+    if (cfgGet('bloqueioretornofaltoso') && isRet && (pt.noShows || 0) > 0) {
+      setCtxCard(null);
+      setRuleBlock({
+        title: 'Remarcação de retorno bloqueada',
+        text: `${pt.name || 'O paciente'} tem ${pt.noShows} falta${pt.noShows > 1 ? 's' : ''} registrada${pt.noShows > 1 ? 's' : ''}. A clínica não permite remarcar o retorno gratuito nesse caso — agende uma nova consulta.`,
+      });
+      return;
+    }
+    setCtxCard(null); setReschedule({ a, prevFreeOnly: app.freeOnly }); set({ freeOnly: true });
+  }
+  function cancelReschedule() { if (reschedule) set({ freeOnly: reschedule.prevFreeOnly }); setReschedule(null); }
+  function applyReschedule(colId, min) {
+    const a = reschedule.a;
+    const slot = resolveSlot(colId);
+    const date = slot.date || a.date;
+    const newPro = state.view === 'semana' ? a.pro : (slot.proId || a.pro);
+    // Configuração: remarcar em dia sem agenda aberta
+    if (!cfgGet('PermitirRemarcarSemGrade') && newPro && !gradesFor(newPro, date).length) {
+      const p = PROS.find(x => x.id === newPro) || {};
+      setRuleBlock({ title: 'Dia sem agenda aberta', text: `${p.name || 'O profissional'} não tem grade de atendimento em ${fmtShortDate(date)}. Escolha um dia com agenda aberta ou ative “Permitir remarcar em dia sem agenda aberta” nas configurações.` });
+      return;
+    }
+    // validação: profissional de destino atende convênio/serviço?
+    if (newPro && newPro !== a.pro) {
+      const conv = a.conv || 'Particular';
+      if (conv !== 'Particular' && !dayAcceptsCond(newPro, date, { conv })) { setDropError({ pro: PROS.find(p => p.id === newPro), kind: 'conv', value: conv }); return; }
+      const procIds = (a.procs && a.procs.length) ? a.procs : (a.proc ? [a.proc] : []);
+      const badProc = procIds.find(pid => pid && !dayAcceptsCond(newPro, date, { procId: pid }));
+      if (badProc) { setDropError({ pro: PROS.find(p => p.id === newPro), kind: 'proc', value: (PROCS[badProc] || {}).name || 'esse serviço' }); return; }
+    }
+    const prev = { ...a };
+    setAppts(s => s.map(x => x.id === a.id ? { ...x, pro: newPro, date, equip: slot.equip || x.equip, room: slot.room || x.room, start: fmtMin(min), status: 'remarcado', reason: `Remarcado · era ${prev.start}` } : x));
+    set({ freeOnly: reschedule.prevFreeOnly });
+    setReschedule(null);
+    flash(`Remarcado para ${fmtMin(min)}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? prev : x)); setToast(null); } } });
   }
   function openEdit(a) { setCtxCard(null); openBooking({ editing: true, appt: a, date: a.date, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: (patientById(a.pt) || {}).name, isNew: false } }); }
 
   // ---- drag reschedule -----------------------------------------------------
   const [drag, setDrag] = React.useState({ appt: null, colId: null, min: null });
   const [dropError, setDropError] = React.useState(null); // { pro, kind:'conv'|'proc', value }
+  const [ruleBlock, setRuleBlock] = React.useState(null);  // { title, text } — regra das Configurações da Agenda
+
+  // Configuração: durante a remarcação, dias sem grade ficam desabilitados no mini-calendário
+  window.__dayBlocked = (reschedule && !cfgGet('PermitirRemarcarSemGrade'))
+    ? iso => gradesFor(reschedule.a.pro, iso).length ? null : 'Profissional sem agenda aberta neste dia'
+    : null;
+
+  // Configuração: "Atualizar status automaticamente no fim do dia" — simulação
+  function simulateDayEnd(target) {
+    const st = STATUS[target] || STATUS.faltou;
+    let n = 0;
+    setAppts(s => s.map(x => {
+      if (x.date === TODAY && ['marcado', 'confirmado'].includes(x.status)) { n++; return { ...x, status: target, reason: `Status atualizado automaticamente no fim do dia` }; }
+      return x;
+    }));
+    setTimeout(() => flash(n ? `${n} agendamento${n > 1 ? 's' : ''} atualizado${n > 1 ? 's' : ''} para ${st.label}` : 'Nenhum agendamento pendente hoje'), 0);
+  }
+
+  function doRetorno(a) {
+    setCtxCard(null);
+    const pt = patientById(a.pt) || {};
+    openBooking({ date: state.date, time: a.start, proId: a.pro, procIds: ['retorno'], patient: { patientId: a.pt, patientName: pt.name || a._patientName, isNew: false } });
+  }
 
   // Coluna de destino é de um profissional? (validação de convênio/serviço só vale p/ médico)
   function targetProOf(colId) {
@@ -202,12 +315,26 @@ function App() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: WT.bg }}>
-      <TopNavbar unit="Unidade Centro" onUnit={() => {}} compact={compact} onToggleSidebar={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} />
+      <TopNavbar unit="Unidade Centro" onUnit={() => {}} compact={compact} onToggleSidebar={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} edition={tw.edition} onEdition={v => setTweak('edition', v)} lang={tw.lang} onLang={v => setTweak('lang', v)} page={app.page} onNavigate={id => set({ page: id })} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {!compact && <Sidebar collapsed={app.sidebarCollapsed} onToggle={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} date={app.date} onSelectDate={iso => set({ date: iso })} onCreate={onCreate} agendaSel={sidebarAgendaSel} />}
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          {app.page === 'agenda-config'
+            ? <AgendaConfigPage cfg={cfg} onBack={() => set({ page: 'agenda' })} resetSection={resetSection} onSimulateDayEnd={simulateDayEnd}
+                setCfg={patch => { setCfg(patch); flash('Configuração salva'); }} />
+            : <>
           <Toolbar state={state} set={set} compact={compact}
             onNew={() => openBooking({ date: state.date, time: '08:00', proId: app.dayPro })} />
+          {reschedule && (() => { const rp = patientById(reschedule.a.pt) || { name: reschedule.a._patientName || 'Paciente' }; return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: WT.accentSoft, borderBottom: `1px solid ${WT.borderAccent}`, flex: 'none' }}>
+              <WIcon name="calendar-clock" size={17} color={WT.accent} style={{ flex: 'none' }} />
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: WT.fg }}>
+                <strong style={{ fontWeight: WT.wHead, color: WT.accent }}>Remarcando {rp.name}</strong>
+                <span style={{ color: WT.fg2 }}> — escolha o novo horário livre. Você pode trocar de agenda, data e visualização.</span>
+              </div>
+              <WButton variant="default" size="s" leadingIcon="x" label="Cancelar remarcação" onClick={cancelReschedule} />
+            </div>
+          ); })()}
           <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               {state.view === 'dia' && <DayView {...viewProps} />}
@@ -218,12 +345,13 @@ function App() {
               {state.view === 'programacao' && <ProgramacaoView {...viewProps} />}
             </div>
           </div>
+            </>}
         </main>
       </div>
 
       {/* overlays */}
       {ctxCard && <ContextCard a={appts.find(x => x.id === ctxCard.a.id) || ctxCard.a} anchorRect={ctxCard.rect || { left: width / 2, right: width / 2, top: 120, bottom: 120 }} onClose={() => setCtxCard(null)}
-        onCheckin={doCheckin} onReschedule={doReschedule} onCancel={doCancel} onOpen={openEdit} />}
+        onReschedule={doReschedule} onCancel={doCancel} onOpen={openEdit} onRetorno={doRetorno} />}
       {quick && <QuickCreatePopover ctx={quick.ctx} anchorRect={quick.rect} onClose={() => { setQuick(null); setDraft(null); }} onMore={ctx => openBooking(ctx)} onSave={onQuickSave} onDraft={onDraft} />}
       {booking && <BookingHost init={booking.init} config={config} flow={BOOKING_FLOW === 'two-tier' ? 'drawer' : BOOKING_FLOW} compact={compact} perms={PERMS} appts={appts} flash={flash} onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} />}
       {cancel && <CancelModal a={cancel.a} onClose={() => setCancel(null)} onConfirm={confirmCancel} />}
@@ -235,7 +363,6 @@ function App() {
           setBlockM(null);
         }}
         onDelete={b => { setBlocks(s => s.filter(x => x.id !== b.id)); setBlockM(null); flash('Bloqueio excluído · horários liberados', { tone: 'danger' }); }} />}
-      {resched && <RescheduleModal a={resched.a} onClose={() => setResched(null)} onConfirm={confirmReschedule} />}
       {blockPick && <BlockChooser blocks={blockPick} onClose={() => setBlockPick(null)} onPick={b => { setBlockPick(null); setBlockM({ block: b }); }} />}
       {dropError && <CenterModal
         title={dropError.kind === 'conv' ? 'Convênio não atendido' : 'Serviço não oferecido'}
@@ -247,12 +374,20 @@ function App() {
             : <><strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>{dropError.pro.name}</strong> não realiza <strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>{dropError.value}</strong>. Escolha um profissional que ofereça esse serviço.</>}
         </div>
       </CenterModal>}
+      {ruleBlock && <CenterModal title={ruleBlock.title} icon="lock" iconTone="danger" width={430} onClose={() => setRuleBlock(null)}
+        footer={<><span style={{ flex: 1 }} /><WButton variant="primary" label="Entendi" onClick={() => setRuleBlock(null)} /></>}>
+        <div style={{ fontSize: 14, color: WT.fg2, lineHeight: 1.55 }}>{ruleBlock.text}</div>
+      </CenterModal>}
       <WToast toast={toast} />
 
       <TweaksPanel title="Tweaks">
+        <TweakSection label="Versão" />
+        <TweakRadio label="Edição do produto" value={tw.edition}
+          options={[{ value: 'final', label: 'Final' }, { value: 'mvp', label: 'MVP' }]}
+          onChange={v => setTweak('edition', v)} />
         <TweakSection label="Demonstração" />
         <TweakRadio label="Idioma / Language" value={tw.lang}
-          options={[{ value: 'pt', label: 'Português' }, { value: 'en', label: 'English' }]}
+          options={[{ value: 'pt', label: 'PT' }, { value: 'en', label: 'EN' }, { value: 'es', label: 'ES' }, { value: 'it', label: 'IT' }]}
           onChange={v => setTweak('lang', v)} />
       </TweaksPanel>
     </div>

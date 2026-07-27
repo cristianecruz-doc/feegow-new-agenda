@@ -26,17 +26,54 @@ const FEEGOW_MENU = [
   { label: 'Faturamento', dropdown: true },
   { label: 'Relatórios',  dropdown: false },
 ];
-function ModuleItem({ label, dropdown, active }) {
+const AGENDA_SUBMENU = [
+  { id: 'agenda', icon: 'calendar-days', label: 'Agenda', desc: 'Grade de horários do dia e da semana' },
+  { id: 'agenda-config', icon: 'settings', label: 'Configurações de Agenda', desc: 'Tudo o que muda o comportamento da agenda' },
+];
+function ModuleItem({ label, dropdown, active, items, current, onNavigate }) {
   const [hover, setHover] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  const [rect, setRect] = React.useState(null);
+  React.useEffect(() => { if (open && ref.current) setRect(ref.current.getBoundingClientRect()); }, [open]);
+  const hasMenu = dropdown && items && items.length > 0;
   return (
-    <button onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5, height: 34, padding: '0 10px', borderRadius: WT.rM,
-      border: 'none', background: hover ? WT.hover : 'transparent', cursor: 'pointer', fontFamily: WT.font,
-      fontSize: 14.5, fontWeight: active ? WT.wHead : WT.wBody, color: WT.fg, whiteSpace: 'nowrap',
-    }}>
-      {label}
-      {dropdown && <WIcon name="chevrons-up-down" size={13} color={WT.muted} />}
-    </button>
+    <>
+      <button ref={ref} onClick={() => hasMenu && setOpen(o => !o)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, height: 34, padding: '0 10px', borderRadius: WT.rM,
+        border: 'none', background: (hover || open) ? WT.hover : 'transparent', cursor: 'pointer', fontFamily: WT.font,
+        fontSize: 14.5, fontWeight: active ? WT.wHead : WT.wBody, color: WT.fg, whiteSpace: 'nowrap',
+      }}>
+        {label}
+        {dropdown && <WIcon name={hasMenu ? (open ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'} size={13} color={WT.muted} />}
+      </button>
+      {hasMenu && open && rect && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }} onMouseDown={() => setOpen(false)}>
+          <div onMouseDown={e => e.stopPropagation()} style={{
+            position: 'fixed', left: Math.min(rect.left, window.innerWidth - 284), top: rect.bottom + 6, width: 272,
+            background: WT.raised, border: `1px solid ${WT.border}`, borderRadius: WT.rL, boxShadow: WT.shPopout,
+            padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
+          }}>
+            {items.map(it => {
+              const on = current === it.id;
+              return (
+                <button key={it.id} onClick={() => { setOpen(false); onNavigate && onNavigate(it.id); }} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 10px', borderRadius: WT.rM,
+                  border: 'none', background: on ? WT.accentSoft : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, width: '100%',
+                }} onMouseEnter={e => { if (!on) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent'; }}>
+                  <WIcon name={it.icon} size={17} color={on ? WT.accent : WT.fg2} style={{ flex: 'none', marginTop: 1 }} />
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: WT.wEmph, color: on ? WT.accent : WT.fg }}>{it.label}</span>
+                    <span style={{ fontSize: 12, color: WT.muted, lineHeight: 1.35 }}>{it.desc}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 function ProductTab({ active, label, children, onClick }) {
@@ -53,7 +90,91 @@ function ProductTab({ active, label, children, onClick }) {
     </button>
   );
 }
-function TopNavbar({ unit, onUnit, onToggleSidebar, compact }) {
+function EditionMenu({ edition, onEdition }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const opts = [{ value: 'final', label: 'Final' }, { value: 'mvp', label: 'MVP' }];
+  const cur = opts.find(o => o.value === edition) || opts[0];
+  return (
+    <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button onClick={() => setOpen(o => !o)} title="Edição do produto" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, height: 30, padding: '0 8px 0 10px', borderRadius: WT.pill,
+        border: `1px solid ${WT.border}`, background: open ? WT.hover : WT.inset, cursor: 'pointer', fontFamily: WT.font,
+        fontSize: 12.5, fontWeight: WT.wEmph, color: WT.fg2,
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: WT.accent, flex: 'none' }} />
+        {cur.label}
+        <WIcon name={open ? 'chevron-up' : 'chevron-down'} size={14} color={WT.muted} />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 36, right: 0, minWidth: 168, background: WT.raised, borderRadius: WT.rL, border: `1px solid ${WT.border}`, boxShadow: WT.shDialog, padding: 6, zIndex: 60 }}>
+          <div style={{ padding: '4px 10px 6px', fontSize: 10.5, fontWeight: WT.wEmph, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>Edição do produto</div>
+          {opts.map(o => (
+            <button key={o.value} onClick={() => { onEdition(o.value); setOpen(false); }} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: WT.rM,
+              border: 'none', background: o.value === edition ? WT.hover : 'transparent', cursor: 'pointer', textAlign: 'left',
+              fontFamily: WT.font, fontSize: 13.5, fontWeight: WT.wBody, color: WT.fg,
+            }} onMouseEnter={e => { if (o.value !== edition) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (o.value !== edition) e.currentTarget.style.background = 'transparent'; }}>
+              <WIcon name={o.value === edition ? 'check' : 'circle'} size={15} color={o.value === edition ? WT.accent : WT.muted} style={{ flex: 'none' }} />
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+function LangMenu({ lang, onLang }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const opts = [
+    { value: 'pt', code: 'PT', label: 'Português' },
+    { value: 'en', code: 'EN', label: 'English' },
+    { value: 'es', code: 'ES', label: 'Español' },
+    { value: 'it', code: 'IT', label: 'Italiano' },
+  ];
+  const cur = opts.find(o => o.value === lang) || opts[0];
+  return (
+    <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button onClick={() => setOpen(o => !o)} title="Idioma / Language" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, height: 30, padding: '0 8px 0 9px', borderRadius: WT.pill,
+        border: `1px solid ${WT.border}`, background: open ? WT.hover : WT.inset, cursor: 'pointer', fontFamily: WT.font,
+        fontSize: 12.5, fontWeight: WT.wEmph, color: WT.fg2,
+      }}>
+        <WIcon name="globe" size={14} color={WT.muted} style={{ flex: 'none' }} />
+        {cur.code}
+        <WIcon name={open ? 'chevron-up' : 'chevron-down'} size={14} color={WT.muted} />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 36, right: 0, minWidth: 168, background: WT.raised, borderRadius: WT.rL, border: `1px solid ${WT.border}`, boxShadow: WT.shDialog, padding: 6, zIndex: 60 }}>
+          <div style={{ padding: '4px 10px 6px', fontSize: 10.5, fontWeight: WT.wEmph, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>Idioma / Language</div>
+          {opts.map(o => (
+            <button key={o.value} onClick={() => { onLang(o.value); setOpen(false); }} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: WT.rM,
+              border: 'none', background: o.value === lang ? WT.hover : 'transparent', cursor: 'pointer', textAlign: 'left',
+              fontFamily: WT.font, fontSize: 13.5, fontWeight: WT.wBody, color: WT.fg,
+            }} onMouseEnter={e => { if (o.value !== lang) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (o.value !== lang) e.currentTarget.style.background = 'transparent'; }}>
+              <span style={{ width: 22, fontSize: 11, fontWeight: WT.wHead, color: o.value === lang ? WT.accent : WT.muted, flex: 'none' }}>{o.code}</span>
+              <span style={{ flex: 1 }}>{o.label}</span>
+              {o.value === lang && <WIcon name="check" size={15} color={WT.accent} style={{ flex: 'none' }} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+function TopNavbar({ unit, onUnit, onToggleSidebar, compact, edition, onEdition, lang, onLang, page, onNavigate }) {
   return (
     <header style={{ flex: 'none', display: 'flex', flexDirection: 'column', zIndex: 30 }}>
       {/* Linha 1 — faixa escura: alternador de produtos */}
@@ -77,7 +198,7 @@ function TopNavbar({ unit, onUnit, onToggleSidebar, compact }) {
         <WIconButton name="menu" onClick={onToggleSidebar} color={WT.fg} title="Menu" />
         {!compact && (
           <nav style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 4, minWidth: 0, overflow: 'hidden' }}>
-            {FEEGOW_MENU.map(m => <ModuleItem key={m.label} {...m} />)}
+            {FEEGOW_MENU.map(m => <ModuleItem key={m.label} {...m} active={m.label === 'Agenda'} items={m.label === 'Agenda' ? AGENDA_SUBMENU : null} current={page || 'agenda'} onNavigate={onNavigate} />)}
             <span style={{ width: 1, height: 22, background: WT.borderSub, margin: '0 6px', flex: 'none' }} />
             <WIconButton name="database" color={WT.fg2} title="Cadastros" />
             <WIconButton name="settings" color={WT.fg2} title="Configurações" />
@@ -85,6 +206,10 @@ function TopNavbar({ unit, onUnit, onToggleSidebar, compact }) {
         )}
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <LangMenu lang={lang} onLang={onLang} />
+          <span style={{ width: 6, flex: 'none' }} />
+          <EditionMenu edition={edition} onEdition={onEdition} />
+          <span style={{ width: 1, height: 22, background: WT.borderSub, margin: '0 8px', flex: 'none' }} />
           {!compact && <WIconButton name="phone" color={WT.fg2} title="Ligações" />}
           {!compact && <WIconButton name="mail" color={WT.fg2} title="Mensagens" />}
           {!compact && <WIconButton name="list-checks" color={WT.fg2} title="Tarefas" />}
@@ -211,7 +336,7 @@ function Sidebar({ collapsed, onToggle, date, onSelectDate, onCreate, agendaSel 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8 }}>
                 {LEGEND.map(([k, label]) => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px', fontSize: 13, color: WT.fg2 }}>
-                    <span style={{ flex: 'none', width: 9, height: 9, borderRadius: '50%', background: STATUS[k].dot, boxShadow: `0 0 0 2px ${STATUS[k].dot}26` }} />{label}
+                    <WIcon name={STATUS[k].icon} size={15} color={STATUS[k].fg} strokeWidth={2.2} style={{ flex: 'none' }} />{label}
                   </div>
                 ))}
               </div>
@@ -260,22 +385,25 @@ function MiniCalendar({ value, onSelect, compact }) {
           const iso = `${y}-${pad2(m + 1)}-${pad2(d)}`;
           const isToday = iso === TODAY;
           const isSel = iso === value;
-          return <CalCell key={i} cell={cell} day={d} isToday={isToday} isSel={isSel} onClick={() => onSelect(iso)} />;
+          const blocked = window.__dayBlocked ? window.__dayBlocked(iso) : null;
+          return <CalCell key={i} cell={cell} day={d} isToday={isToday} isSel={isSel} disabled={!!blocked} title={blocked || undefined} onClick={() => onSelect(iso)} />;
         })}
       </div>
     </div>
   );
 }
-function CalCell({ cell, day, isToday, isSel, onClick }) {
+function CalCell({ cell, day, isToday, isSel, onClick, disabled, title }) {
   const [hover, setHover] = React.useState(false);
   return (
-    <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
-      height: cell, border: 'none', cursor: 'pointer', borderRadius: '50%',
+    <button onClick={disabled ? undefined : onClick} title={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
+      height: cell, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', borderRadius: '50%',
       display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 1,
       fontFamily: WT.font, fontSize: 13, fontVariantNumeric: 'tabular-nums',
       fontWeight: isSel || isToday ? WT.wEmph : WT.wBody,
-      background: isSel ? WT.calSelBg : (hover ? WT.calHi : 'transparent'),
-      color: isSel ? WT.calSelFg : (isToday ? WT.calTodayFg : WT.fg),
+      background: isSel ? WT.calSelBg : (hover && !disabled ? WT.calHi : 'transparent'),
+      color: disabled ? WT.placeholder : (isSel ? WT.calSelFg : (isToday ? WT.calTodayFg : WT.fg)),
+      opacity: disabled ? 0.55 : 1,
+      textDecoration: disabled ? 'line-through' : 'none',
       boxShadow: isToday && !isSel ? `inset 0 0 0 1.5px ${WT.calToday}` : 'none',
     }}>{day}</button>
   );

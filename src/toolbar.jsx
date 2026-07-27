@@ -65,6 +65,8 @@ function CheckList({ title, options, selected, onToggle, onClear }) {
 
 function Toolbar({ state, set, onNew, compact }) {
   const { view, date, filters, freeOnly, weekMode } = state;
+  const mvp = !!window.__mvp;
+  const viewOpts = mvp ? VIEW_OPTS.filter(v => v.value === 'dia' || v.value === 'semana') : VIEW_OPTS;
   const [pop, setPop] = React.useState(null); // {kind, rect}
   const [fq, setFq] = React.useState('');      // busca dentro do popover de filtros
   const open = (kind, rect) => setPop(p => (p && p.kind === kind ? null : { kind, rect }));
@@ -78,11 +80,12 @@ function Toolbar({ state, set, onNew, compact }) {
   const specs = PROS.flatMap(p => specsOf(p)).filter((v, i, a) => a.indexOf(v) === i);
   // um profissional se encaixa no conjunto de filtros (especialidade + sala + convênio)?
   const proFitsFilters = (p, f) => {
-    const sp = f.spec || [], rm = f.room || [], un = f.unit || [], cv = f.conv || [];
+    const sp = f.spec || [], rm = f.room || [], un = f.unit || [], cv = f.conv || [], pc = f.proc || [];
     if (sp.length && !sp.some(s => proHasSpec(p, s))) return false;
     if (rm.length && !rm.includes(p.room)) return false;
     if (un.length && !un.includes(p.unit)) return false;
     if (cv.length && !cv.some(c => dayAcceptsCond(p.id, date, { conv: c }))) return false;
+    if (pc.length && !pc.some(id => dayAcceptsCond(p.id, date, { procId: id }))) return false;
     return true;
   };
   // Profissionais elegíveis: só os que se encaixam na especialidade / sala selecionadas
@@ -94,18 +97,21 @@ function Toolbar({ state, set, onNew, compact }) {
     const nextVals = cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val];
     const nextFilters = { ...s.filters, [key]: nextVals };
     // ao mudar especialidade/unidade/sala/convênio, seleciona automaticamente TODOS os profissionais que se encaixam (interseção)
-    if (key === 'spec' || key === 'unit' || key === 'room' || key === 'conv') {
-      const sp = nextFilters.spec || [], un = nextFilters.unit || [], rm = nextFilters.room || [], cv = nextFilters.conv || [];
-      nextFilters.pros = (sp.length || un.length || rm.length || cv.length)
+    if (key === 'spec' || key === 'unit' || key === 'room' || key === 'conv' || key === 'proc') {
+      const sp = nextFilters.spec || [], un = nextFilters.unit || [], rm = nextFilters.room || [], cv = nextFilters.conv || [], pc = nextFilters.proc || [];
+      nextFilters.pros = (sp.length || un.length || rm.length || cv.length || pc.length)
         ? PROS.filter(p => proFitsFilters(p, nextFilters)).map(p => p.id)
         : null; // sem restrições → volta a mostrar todas as agendas
     }
     return { filters: nextFilters };
   });
   const clearFilter = key => set(s => ({ filters: { ...s.filters, [key]: key === 'pros' ? null : [] } }));
-  const clearAll = () => set({ filters: { pros: null, spec: [], conv: [], unit: [], room: [] }, freeOnly: false });
+  const clearAll = () => set({ filters: { pros: null, spec: [], conv: [], unit: [], room: [], proc: [] }, freeOnly: false });
   const arr = k => filters[k] || [];
-  const activeCount = arr('pros').length + arr('spec').length + arr('conv').length + arr('unit').length + arr('room').length + (freeOnly ? 1 : 0);
+  const activeCount = arr('pros').length + arr('spec').length + arr('conv').length + arr('unit').length + arr('room').length + arr('proc').length + (freeOnly ? 1 : 0);
+  // procedimentos ordenados por uso (clínicas reais têm +15k → mostra só top 10 até o usuário buscar)
+  const PROC_USAGE = React.useMemo(() => { const c = {}; (window.ALL_APPTS || []).forEach(a => ((a.procs && a.procs.length) ? a.procs : (a.proc ? [a.proc] : [])).forEach(id => { c[id] = (c[id] || 0) + 1; })); return c; }, []);
+  const procsByUse = React.useMemo(() => PROC_LIST.slice().sort((a, b) => (PROC_USAGE[b.id] || 0) - (PROC_USAGE[a.id] || 0)), [PROC_USAGE]);
 
   // opções do popover, com busca (mesmo padrão da aba de recursos)
   const ql = fq.trim().toLowerCase();
@@ -116,7 +122,10 @@ function Toolbar({ state, set, onNew, compact }) {
   const fConv = CONVENIOS.filter(matchq);
   const fUnits = UNITS.filter(matchq);
   const fRooms = rooms.filter(matchq);
-  const noResults = ql && !fProOpts.length && !fSpecs.length && !fConv.length && !fUnits.length && !fRooms.length;
+  // procedimentos: sem busca → top 10 mais usados; com busca → todos os que casam
+  const fProcs = ql ? procsByUse.filter(p => matchq(p.name)) : procsByUse.slice(0, 10);
+  const procMore = !ql && procsByUse.length > 10 ? procsByUse.length - 10 : 0;
+  const noResults = ql && !fProOpts.length && !fSpecs.length && !fConv.length && !fUnits.length && !fRooms.length && !fProcs.length;
 
   return (
     <div style={{ flex: 'none', background: WT.bg, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -139,8 +148,8 @@ function Toolbar({ state, set, onNew, compact }) {
 
       {/* right: view tabs · filtros · ajustes · novo */}
       {compact
-        ? <WSelect value={view} onChange={v => set({ view: v })} options={VIEW_OPTS} placeholder="" style={{ width: 140 }} />
-        : <WSegmented options={VIEW_OPTS} value={view} onChange={v => set({ view: v })} />}
+        ? <WSelect value={view} onChange={v => set({ view: v })} options={viewOpts} placeholder="" style={{ width: 140 }} />
+        : <WSegmented options={viewOpts} value={view} onChange={v => set({ view: v })} />}
 
       <button onClick={e => open('filters', e.currentTarget.getBoundingClientRect())} style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: WT.rM,
@@ -185,8 +194,9 @@ function Toolbar({ state, set, onNew, compact }) {
             {fProOpts.length > 0 && <CheckList title="Profissionais" options={fProOpts} selected={arr('pros')} onToggle={v => toggleFilter('pros', v)} onClear={() => clearFilter('pros')} />}
             {fSpecs.length > 0 && <><WDivider /><CheckList title="Especialidade" options={fSpecs} selected={arr('spec')} onToggle={v => toggleFilter('spec', v)} onClear={() => clearFilter('spec')} /></>}
             {fUnits.length > 0 && <><WDivider /><CheckList title="Unidade" options={fUnits} selected={arr('unit')} onToggle={v => toggleFilter('unit', v)} onClear={() => clearFilter('unit')} /></>}
-            {fConv.length > 0 && <><WDivider /><CheckList title="Convênio" options={fConv} selected={arr('conv')} onToggle={v => toggleFilter('conv', v)} onClear={() => clearFilter('conv')} /></>}
-            {fRooms.length > 0 && <><WDivider /><CheckList title="Sala" options={fRooms} selected={arr('room')} onToggle={v => toggleFilter('room', v)} onClear={() => clearFilter('room')} /></>}
+            {fConv.length > 0 && !mvp && <><WDivider /><CheckList title="Convênio" options={fConv} selected={arr('conv')} onToggle={v => toggleFilter('conv', v)} onClear={() => clearFilter('conv')} /></>}
+            {fRooms.length > 0 && !mvp && <><WDivider /><CheckList title="Sala" options={fRooms} selected={arr('room')} onToggle={v => toggleFilter('room', v)} onClear={() => clearFilter('room')} /></>}
+            {fProcs.length > 0 && <><WDivider /><CheckList title={ql ? 'Procedimento' : 'Procedimento · mais usados'} options={fProcs.map(p => ({ value: p.id, label: p.name }))} selected={arr('proc')} onToggle={v => toggleFilter('proc', v)} onClear={() => clearFilter('proc')} />{procMore > 0 && <div style={{ padding: '0 16px 8px', fontSize: 12, color: WT.muted }}>Digite para buscar entre todos os procedimentos (+{procMore}).</div>}</>}
           </div>
         </WPopover>
       )}
@@ -198,11 +208,6 @@ function Toolbar({ state, set, onNew, compact }) {
               <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Indicação de cor do profissional</span>
               <WSegmented value={state.cardStyle} onChange={v => set({ cardStyle: v })}
                 options={[{ value: 'typebar', label: 'Barra' }, { value: 'filled', label: 'Preenchido' }]} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Densidade</span>
-              <WSegmented value={state.density} onChange={v => set({ density: v })}
-                options={[{ value: 'compact', label: 'Compacto' }, { value: 'normal', label: 'Normal' }, { value: 'comfortable', label: 'Amplo' }]} />
             </div>
             <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Sinalizadores no card</span>
