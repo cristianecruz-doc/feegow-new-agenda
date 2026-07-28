@@ -19,6 +19,13 @@ const LCFG_DEFAULTS = {
   remarcarSemGrade: true, bloquearRetornoFaltoso: false, statusAutomatico: false, statusAutomaticoPara: 'faltou',
   contaPagarCancelamento: false, liberarHorarioRemarcacao: false, pedirObservacaoStatus: true,
   intervaloMinGrade: 1, cancelarOnlineNaoPago: true, enviarFimDeSemana: true,
+  // --- configurações legadas em descontinuação (as "em uso" vêm ligadas) ---
+  dCorPaciente: true, dAlturaLinha: true, dEncaixeEquip: true, dBloquearEncaixeBloqueado: false,
+  dRemarcNaoEncaixe: false, dObrigarLocal: true, dCampoCanal: false, dFiltroLocaisUnidades: false,
+  dManterAvisos: false, dValidarPrazoRetorno: false, dTabelaPacienteOnline: false, dGeolocalizacao: false,
+  dRetornoEncaixe: false, dOcultarEncaixe: false, dOcultarOutroLocal: false, dValorMinParcela: 50,
+  dAntecedenciaMin: 0, dEquipMarcados: false, dChoqueEquip: false, dObrigarProfEquip: false,
+  dLinkOnline: 'agenda.clinicasaolucas.com.br', dSubtrair1Min: true, dCoparticipacao: false,
 };
 const LSTATUS = [
   { id: 'agendado', label: 'Agendado', fg: '#565f5f', bg: '#eef0f0', icon: 'circle' },
@@ -93,8 +100,32 @@ function LSelect({ label, value, onChange, options, width = 210 }) {
     </label>
   );
 }
+function LNumField({ value, onChange, prefix, suffix, width = 132, min = 0, step = 1 }) {
+  const [t, setT] = React.useState(String(value ?? ''));
+  React.useEffect(() => { setT(String(value ?? '')); }, [value]);
+  const commit = () => { const n = Math.max(min, Number(String(t).replace(',', '.')) || 0); setT(String(n)); if (n !== Number(value)) onChange(n); };
+  return (
+    <span style={{ width, height: 32, borderRadius: 8, border: `1px solid ${WTOK.border}`, background: '#fff', display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px' }}>
+      {prefix && <span style={{ fontSize: 13, color: WTOK.muted, flex: 'none' }}>{prefix}</span>}
+      <input value={t} onChange={e => setT(e.target.value)} onBlur={commit} onKeyDown={e => e.key === 'Enter' && commit()} inputMode="decimal" step={step}
+        style={{ border: 'none', outline: 'none', background: 'transparent', font: `${WTOK.wHead} 14px ${WTOK.font}`, color: WTOK.fg, width: '100%', minWidth: 0, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }} />
+      {suffix && <span style={{ fontSize: 12.5, color: WTOK.muted, flex: 'none' }}>{suffix}</span>}
+    </span>
+  );
+}
+function LTextField({ value, onChange, width = 300, placeholder }) {
+  const [t, setT] = React.useState(value || '');
+  React.useEffect(() => { setT(value || ''); }, [value]);
+  const commit = () => { if (t !== value) onChange(t); };
+  return (
+    <span style={{ width, maxWidth: '100%', height: 32, borderRadius: 8, border: `1px solid ${WTOK.border}`, background: '#fff', display: 'flex', alignItems: 'center', padding: '0 10px' }}>
+      <input value={t} placeholder={placeholder} onChange={e => setT(e.target.value)} onBlur={commit} onKeyDown={e => e.key === 'Enter' && commit()}
+        style={{ border: 'none', outline: 'none', background: 'transparent', font: `${WTOK.wBody} 13.5px ${WTOK.font}`, color: WTOK.fg, width: '100%', minWidth: 0 }} />
+    </span>
+  );
+}
 function LBadge({ tone = 'neutral', children, icon }) {
-  const map = { neutral: ['#e8eaea', '#565f5f', '#c4c9c9'], legado: [WTOK.warnBg, WTOK.warnFg, WTOK.warnBd], info: ['#e2e9ff', '#1b5ea9', '#aec6ee'] };
+  const map = { neutral: ['#e8eaea', '#565f5f', '#c4c9c9'], legado: [WTOK.warnBg, WTOK.warnFg, WTOK.warnBd], info: ['#e2e9ff', '#1b5ea9', '#aec6ee'], dep: ['#fbeae8', '#a3291a', '#eec3bd'], off: ['#f3f5f5', '#888f8f', '#dcdfdf'], usada: [WTOK.accentSoft, WTOK.accent, WTOK.borderAccent + '66'] };
   const [bg, fg, bd] = map[tone] || map.neutral;
   return (
     <span style={{ height: 20, padding: '0 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: WTOK.wEmph, background: bg, color: fg, border: `1px solid ${bd}`, whiteSpace: 'nowrap' }}>
@@ -111,8 +142,37 @@ const LSECTIONS = [
   { id: 's4', n: 4, icon: 'calendar-clock', title: 'Remarcação, status e cancelamento', desc: 'O que acontece depois que o agendamento já existe.' },
   { id: 's5', n: 5, icon: 'globe', title: 'Grade e agendamento online', desc: 'Criação de grade, reservas online e envio de avisos.' },
 ];
+const LSEC_DEP = { id: 's6', n: 6, icon: 'archive', title: 'Configurações legadas (em descontinuação)', desc: 'Configurações com menos de 6% de adoção, mantidas apenas para as clínicas que já as utilizam.' };
 
 const T = (v, set) => <LToggle checked={!!v} onChange={set} />;
+
+// ---- configurações legadas em descontinuação (<6% de adoção) ---------------
+// used: em uso pela clínica simulada → renderizadas e editáveis na versão real.
+const LDEP = [
+  { key: 'dCorPaciente', used: true, title: 'Exibir cor de identificação do paciente', desc: 'Destaca na agenda pacientes que têm cor de identificação na ficha (prioridade, alerta).' },
+  { key: 'dAlturaLinha', used: true, title: 'Altura da linha pelo tempo do procedimento', desc: 'Consultas mais longas ocupam mais espaço na tela da agenda.' },
+  { key: 'dEncaixeEquip', used: true, title: 'Permitir encaixe em equipamentos', desc: 'Deixa encaixar pacientes também nas agendas de aparelhos e salas.' },
+  { key: 'dBloquearEncaixeBloqueado', title: 'Bloquear encaixe em horário bloqueado', desc: 'Impede encaixar paciente em horário que foi bloqueado de propósito.' },
+  { key: 'dRemarcNaoEncaixe', title: 'Não contar remarcação como encaixe', desc: 'Remarcar um paciente não consome o limite de encaixes do profissional.' },
+  { key: 'dObrigarLocal', used: true, title: 'Obrigar local de atendimento', desc: 'Exige informar a sala/local em todo agendamento.' },
+  { key: 'dCampoCanal', title: 'Campo Canal no agendamento', desc: 'Registra por onde o paciente chegou (telefone, WhatsApp, balcão).' },
+  { key: 'dFiltroLocaisUnidades', title: 'Filtro de locais só com unidades', desc: 'O filtro de locais da agenda múltipla mostra só as unidades, sem listar salas.' },
+  { key: 'dManterAvisos', title: 'Manter avisos do paciente', desc: 'Os avisos não são removidos automaticamente ao agendar; ficam até resolução manual.' },
+  { key: 'dValidarPrazoRetorno', title: 'Validar prazo de retornos', desc: 'Confere se o retorno está dentro do prazo antes de deixar marcar.' },
+  { key: 'dTabelaPacienteOnline', title: 'Tabela do paciente no agendamento online', desc: 'No online, o preço usa a tabela particular vinculada à ficha do paciente.' },
+  { key: 'dGeolocalizacao', title: 'Busca por geolocalização', desc: 'Ajuda a encontrar a unidade ou profissional mais próximo do paciente (redes).' },
+  { key: 'dRetornoEncaixe', title: 'Retornos como encaixe', desc: 'Retornos entram na agenda como encaixe, sem ocupar horário da grade.' },
+  { key: 'dOcultarEncaixe', title: 'Ocultar indicação de encaixe', desc: 'Encaixes aparecem como agendamentos comuns, sem a etiqueta de encaixe.' },
+  { key: 'dOcultarOutroLocal', title: 'Ocultar agendamentos de outro local', desc: 'Agendamento feito para local diferente do local da grade não aparece naquela agenda.' },
+  { key: 'dValorMinParcela', used: true, title: 'Valor mínimo de parcela', desc: 'Define o valor mínimo de cada parcela ao parcelar um pagamento.', control: (v, set) => <LNumField value={v} onChange={set} prefix="R$" /> },
+  { key: 'dAntecedenciaMin', title: 'Antecedência mínima para agendar', desc: 'Exige que agendamentos sejam feitos com este tempo de antecedência.', control: (v, set) => <LNumField value={v} onChange={set} suffix="min" /> },
+  { key: 'dEquipMarcados', title: 'Equipamentos marcados por padrão', desc: 'Na agenda múltipla, todos os equipamentos já vêm selecionados ao abrir.' },
+  { key: 'dChoqueEquip', title: 'Permitir choque de horário em equipamento', desc: 'Permite dois agendamentos no mesmo aparelho no mesmo horário.' },
+  { key: 'dObrigarProfEquip', title: 'Obrigar profissional em equipamentos', desc: 'Todo agendamento de aparelho/sala precisa de um profissional responsável.' },
+  { key: 'dLinkOnline', title: 'Link direto do agendamento online', desc: 'Endereço personalizado da página de agendamento online da clínica.', control: (v, set) => <LTextField value={v} onChange={set} placeholder="agenda.suaclinica.com.br" /> },
+  { key: 'dSubtrair1Min', used: true, title: 'Subtrair 1 minuto do retorno', desc: 'Ajuste técnico que evita conflito de horário ao marcar retorno no mesmo slot.' },
+  { key: 'dCoparticipacao', title: 'Coparticipação de convênio', desc: 'Registra a parte paga pelo paciente em convênios com coparticipação.' },
+].map(s => ({ ...s, sec: 's6', dep: true, control: s.control || T }));
 
 function lcfgSettings(cfg, setCfg) {
   return [
@@ -157,18 +217,22 @@ function lcfgSettings(cfg, setCfg) {
 function LCfgRow({ s, cfg, setCfg }) {
   const v = cfg[s.key];
   const custom = !lcfgSame(v === undefined ? LCFG_DEFAULTS[s.key] : v, LCFG_DEFAULTS[s.key]);
+  const ghost = s.dep && !s.used;
   return (
-    <div style={{ padding: '16px 0 0' }}>
+    <div style={{ padding: '16px 0 0', opacity: ghost ? 0.5 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: '1 1 300px', maxWidth: '58ch' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 14, fontWeight: WTOK.wEmph, color: WTOK.fg }}>{s.title}</span>
             {s.legado && <LBadge tone="legado" icon="history">Legado</LBadge>}
-            {custom && <LBadge>personalizado</LBadge>}
+            {s.dep && <LBadge tone="dep" icon="archive">Em descontinuação</LBadge>}
+            {s.dep && s.used && <LBadge tone="usada" icon="check">Em uso pela sua clínica</LBadge>}
+            {s.dep && !s.used && <LBadge tone="off" icon="eye-off">Não utilizada — deixará de ser exibida</LBadge>}
+            {custom && !ghost && <LBadge>personalizado</LBadge>}
           </div>
           <span style={{ fontSize: 13, color: WTOK.fg2, lineHeight: 1.45, textWrap: 'pretty' }}>{s.desc}</span>
         </div>
-        <div style={{ flex: '0 1 auto', maxWidth: 420, display: 'flex', justifyContent: 'flex-end' }}>{s.control(v, nv => setCfg({ [s.key]: nv }))}</div>
+        <div style={{ flex: '0 1 auto', maxWidth: 420, display: 'flex', justifyContent: 'flex-end', pointerEvents: ghost ? 'none' : 'auto' }}>{s.control(v, nv => setCfg({ [s.key]: nv }))}</div>
       </div>
       {s.extra && s.extra()}
     </div>
@@ -177,14 +241,35 @@ function LCfgRow({ s, cfg, setCfg }) {
 
 function LegacyConfigPage({ cfg, setCfg, resetSection, onBack }) {
   const [q, setQ] = React.useState('');
+  const [persona, setPersona] = React.useState(() => { try { return localStorage.getItem('feegow.legacyDepPersona') || 'usa'; } catch (e) { return 'usa'; } });
+  const pickPersona = p => { setPersona(p); try { localStorage.setItem('feegow.legacyDepPersona', p); } catch (e) {} };
+  const usaDep = persona === 'usa';
   const ql = q.trim().toLowerCase();
-  const all = lcfgSettings(cfg, setCfg);
+  const base = lcfgSettings(cfg, setCfg);
+  const all = usaDep ? base.concat(LDEP) : base;
+  const sections = usaDep ? LSECTIONS.concat(LSEC_DEP) : LSECTIONS;
   const match = s => !ql || (s.title + ' ' + s.desc).toLowerCase().includes(ql);
-  const nLegado = all.filter(s => s.legado).length;
-  const anything = LSECTIONS.some(sec => all.some(s => s.sec === sec.id && match(s)));
+  const nLegado = base.filter(s => s.legado).length;
+  const anything = sections.some(sec => all.some(s => s.sec === sec.id && match(s)));
   return (
     <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: WTOK.bg, fontFamily: WTOK.font }}>
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '24px 24px 64px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: `1px dashed ${WTOK.border}`, flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: WTOK.wHead, letterSpacing: '.04em', textTransform: 'uppercase', color: WTOK.muted }}>
+            <LIcon name="flask-conical" size={13} />Simular como
+          </span>
+          <div style={{ display: 'flex', gap: 4, background: WTOK.inset, borderRadius: 999, padding: 3, border: `1px solid ${WTOK.borderSub}` }}>
+            {[{ id: 'usa', label: 'Clínica que usa configurações legadas' }, { id: 'nova', label: 'Clínica nova / que não usa' }].map(p => {
+              const on = persona === p.id;
+              return (
+                <button key={p.id} onClick={() => pickPersona(p.id)}
+                  style={{ height: 26, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontFamily: WTOK.font, fontSize: 12.5, fontWeight: on ? WTOK.wHead : WTOK.wBody, border: `1px solid ${on ? WTOK.border : 'transparent'}`, background: on ? '#fff' : 'transparent', color: on ? WTOK.fg : WTOK.fg2 }}>{p.label}</button>
+              );
+            })}
+          </div>
+          <span style={{ fontSize: 12, color: WTOK.muted, flex: '1 1 auto', minWidth: 120 }}>Controle apenas do protótipo — não existe no produto.</span>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <button onClick={onBack} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px 2px 0', fontFamily: WTOK.font, fontSize: 13, fontWeight: WTOK.wEmph, color: WTOK.accent }}>
@@ -207,30 +292,39 @@ function LegacyConfigPage({ cfg, setCfg, resetSection, onBack }) {
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar configuração…"
               style={{ border: 'none', outline: 'none', font: `${WTOK.wBody} 14px ${WTOK.font}`, flex: 1, background: 'transparent', color: WTOK.fg, minWidth: 0 }} />
           </span>
-          <span style={{ fontSize: 12.5, color: WTOK.muted }}>{all.length} configurações · {nLegado} exclusivas da agenda atual</span>
+          <span style={{ fontSize: 12.5, color: WTOK.muted }}>{all.length} configurações · {nLegado} exclusivas da agenda atual{usaDep ? ` · ${LDEP.length} em descontinuação` : ''}</span>
         </div>
 
-        {LSECTIONS.map(sec => {
+        {sections.map(sec => {
           const rows = all.filter(s => s.sec === sec.id && match(s));
           if (!rows.length) return null;
+          const isDep = sec.id === 's6';
           const allLegado = rows.every(r => r.legado);
           return (
-            <section key={sec.id} style={{ background: WTOK.raised, border: `1px solid ${WTOK.border}`, borderRadius: 16, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', background: WTOK.inset, borderBottom: `1px solid ${WTOK.border}` }}>
-                <span style={{ width: 32, height: 32, borderRadius: 8, flex: 'none', background: WTOK.accentSoft, border: `1px solid ${WTOK.borderAccent}44`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <LIcon name={sec.icon} size={17} color={WTOK.accent} />
+            <section key={sec.id} style={{ background: WTOK.raised, border: `1px solid ${isDep ? WTOK.warnBd : WTOK.border}`, borderRadius: 16, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', background: isDep ? '#fdfaec' : WTOK.inset, borderBottom: `1px solid ${isDep ? WTOK.warnBd : WTOK.border}` }}>
+                <span style={{ width: 32, height: 32, borderRadius: 8, flex: 'none', background: isDep ? WTOK.warnBg : WTOK.accentSoft, border: `1px solid ${isDep ? WTOK.warnBd : WTOK.borderAccent + '44'}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <LIcon name={sec.icon} size={17} color={isDep ? WTOK.warnFg : WTOK.accent} />
                 </span>
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <h2 style={{ margin: 0, fontSize: 16, fontWeight: WTOK.wHead, color: WTOK.fg, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span><span style={{ color: WTOK.accent, fontVariantNumeric: 'tabular-nums' }}>{sec.n}.</span> {sec.title}</span>
-                    {allLegado && <LBadge tone="legado" icon="history">Só na agenda atual</LBadge>}
+                    <span><span style={{ color: isDep ? WTOK.warnFg : WTOK.accent, fontVariantNumeric: 'tabular-nums' }}>{sec.n}.</span> {sec.title}</span>
+                    {allLegado && !isDep && <LBadge tone="legado" icon="history">Só na agenda atual</LBadge>}
                   </h2>
                   <p style={{ margin: 0, fontSize: 12.5, color: WTOK.fg2, lineHeight: 1.45 }}>{sec.desc}</p>
                 </div>
-                <button onClick={() => resetSection(rows.map(r => r.key))}
+                <button onClick={() => resetSection(rows.filter(r => !r.dep || r.used).map(r => r.key))}
                   style={{ flex: 'none', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: WTOK.font, fontSize: 12.5, fontWeight: WTOK.wEmph, color: WTOK.accent }}>Restaurar padrão</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', padding: '0 20px 20px' }}>
+                {isDep && (
+                  <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 10, background: WTOK.warnBg, border: `1px solid ${WTOK.warnBd}` }}>
+                    <LIcon name="archive" size={16} color={WTOK.warnFg} style={{ marginTop: 1 }} />
+                    <span style={{ fontSize: 13, color: WTOK.warnFg, lineHeight: 1.5, textWrap: 'pretty' }}>
+                      Estas configurações foram descontinuadas por baixo uso. Elas continuam disponíveis aqui porque a sua clínica as utiliza. Clínicas que não as utilizam não veem esta seção.
+                    </span>
+                  </div>
+                )}
                 {rows.map((s, i) => (
                   <div key={s.key} style={{ borderTop: i === 0 ? 'none' : `1px solid ${WTOK.borderSub}`, marginTop: i === 0 ? 0 : 16 }}>
                     <LCfgRow s={s} cfg={cfg} setCfg={setCfg} />
