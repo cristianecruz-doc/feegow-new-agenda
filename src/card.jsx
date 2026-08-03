@@ -58,8 +58,9 @@ function apptFlags(a, pt) {
 }
 
 // ---- Smart status tag (clicável — troca o status pelo próprio card) --------
-function StatusSmartTag({ a, size = 'm', onOpenMenu }) {
+function StatusSmartTag({ a, size = 'm', onOpenMenu, mono }) {
   const st = STATUS[a.status] || STATUS.marcado;
+  const tagBg = mono ? '#ffffffd9' : st.bg, tagFg = mono || st.fg;
   const ref = React.useRef(null);
   const [open, setOpen] = React.useState(false);
   const [rect, setRect] = React.useState(null);
@@ -72,9 +73,9 @@ function StatusSmartTag({ a, size = 'm', onOpenMenu }) {
   const h = size === 's' ? 17 : 21;
   return (
     <span ref={ref} role="button" tabIndex={0} onClick={toggle} title={`Status: ${st.label} · clique para alterar`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 1, flex: 'none', height: h, padding: size === 's' ? '0 3px 0 4px' : '0 4px 0 6px', borderRadius: WT.pill, background: st.bg, color: st.fg, border: `1px solid ${st.fg}2e`, lineHeight: 1, whiteSpace: 'nowrap', cursor: 'pointer' }}>
-      <WIcon name={st.icon} size={size === 's' ? 12 : 14} color={st.fg} strokeWidth={2.2} style={{ flex: 'none' }} />
-      <WIcon name="chevron-down" size={size === 's' ? 10 : 12} color={st.fg} style={{ flex: 'none', opacity: 0.85 }} />
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 1, flex: 'none', height: h, padding: size === 's' ? '0 3px 0 4px' : '0 4px 0 6px', borderRadius: WT.pill, background: tagBg, color: tagFg, border: `1px solid ${mono ? `color-mix(in srgb, ${mono} 34%, transparent)` : st.fg + '2e'}`, lineHeight: 1, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+      <WIcon name={st.icon} size={size === 's' ? 12 : 14} color={tagFg} strokeWidth={2.2} style={{ flex: 'none' }} />
+      <WIcon name="chevron-down" size={size === 's' ? 10 : 12} color={tagFg} style={{ flex: 'none', opacity: 0.85 }} />
       {open && ReactDOM.createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 4000 }} onMouseDown={e => { e.stopPropagation(); setOpen(false); }} onClick={e => e.stopPropagation()}>
           <div onMouseDown={e => e.stopPropagation()} style={{ position: 'fixed', top: Math.min((rect ? rect.bottom : 0) + 5, window.innerHeight - 320), left: Math.min(rect ? rect.left : 0, window.innerWidth - 210), width: 196, maxHeight: 316, overflow: 'auto', background: WT.raised, border: `1px solid ${WT.border}`, borderRadius: WT.rM, boxShadow: WT.shPopout, padding: 5, fontFamily: WT.font }}>
@@ -99,8 +100,11 @@ function StatusSmartTag({ a, size = 'm', onOpenMenu }) {
 }
 
 // pequena etiqueta do procedimento — barrinha colorida à esquerda + nome
-function ProcTag({ a, compact }) {
+function ProcTag({ a, compact, mono }) {
   const t = apptColors(a);
+  if (mono) return (
+    <span title={apptProcName(a)} style={{ minWidth: 0, fontSize: compact ? 10.5 : 11.5, fontWeight: WT.wEmph, color: mono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{apptProcName(a)}</span>
+  );
   return (
     <span title={apptProcName(a)} style={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', height: compact ? 16 : 19, background: t.tint, borderLeft: `3px solid ${t.bar}`, borderRadius: '3px 4px 4px 3px', paddingLeft: 6, paddingRight: 7, overflow: 'hidden' }}>
       <span style={{ fontSize: compact ? 10.5 : 11.5, fontWeight: WT.wEmph, color: t.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{apptProcName(a)}</span>
@@ -115,16 +119,20 @@ function AppointmentCard({ ev, top, height, leftPct, widthPct, gutter = 0, cardS
   const pt = patientById(a.pt) || { name: a.pt };
   const pro = PROS.find(p => p.id === a.pro);
   const proBadge = showPro && pro ? (
-    <span title={pro.name} style={{ width: 17, height: 17, borderRadius: '50%', flex: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8.5, fontWeight: WT.wHead, background: pro.color, color: '#fff', letterSpacing: '.02em' }}>{pro.initials}</span>
+    <WProfileAvatar src={pro.photo} size={17} icon="user-round" title={pro.name} />
   ) : null;
   const cancelled = a.status === 'cancelado';
   const flags = apptFlags(a, pt);
   const ref = React.useRef(null);
   const [hover, setHover] = React.useState(false);
 
-  const bg = cardStyle === 'filled' ? (t.tint) : '#fff';
-  const border = conflict ? WT.borderDanger : (a.fitIn ? 'transparent' : WT.border);
-  const nameColor = conflict ? WT.danger : WT.fg;
+  // paleta monocromática derivada da cor do serviço: fundo claro, textos em tons escuros do mesmo tom
+  const svc = t.bar;
+  const strong = t.fg;
+  const soft = `color-mix(in srgb, ${t.fg} 90%, #fff)`;
+  const bg = cardStyle === 'filled' ? `color-mix(in srgb, ${svc} 20%, #fff)` : '#fff';
+  const border = conflict ? WT.borderDanger : (a.fitIn ? 'transparent' : `color-mix(in srgb, ${svc} 42%, #fff)`);
+  const nameColor = conflict ? WT.danger : strong;
   const narrow = widthPct != null && widthPct < 99; // dividindo a coluna com agendamentos paralelos
 
   const tiny = height < 34;                 // uma linha (bem curto)
@@ -135,7 +143,7 @@ function AppointmentCard({ ev, top, height, leftPct, widthPct, gutter = 0, cardS
   const showConv = !window.__mvp;
   const conv = a.plano ? a.conv : (a.price ? 'Particular' : 'Particular');
   const convTag = showConv ? (
-    <span title={`Convênio · ${conv}`} style={{ flex: 'none', maxWidth: '46%', fontSize: 10.5, fontWeight: WT.wEmph, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv}</span>
+    <span title={`Convênio · ${conv}`} style={{ flex: 'none', maxWidth: '46%', fontSize: 10.5, fontWeight: WT.wEmph, color: soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv}</span>
   ) : null;
   const open = () => onOpen(a, ref.current.getBoundingClientRect());
 
@@ -161,31 +169,31 @@ function AppointmentCard({ ev, top, height, leftPct, widthPct, gutter = 0, cardS
       }}>
       {tiny ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: '100%', minWidth: 0 }}>
-          {conflict ? <WIcon name="alert-triangle" size={12} color={WT.danger} style={{ flex: 'none' }} /> : <><StatusSmartTag a={a} size="s" />{proBadge}</>}
+          {conflict ? <WIcon name="alert-triangle" size={12} color={WT.danger} style={{ flex: 'none' }} /> : <><StatusSmartTag a={a} size="s" mono={strong} />{proBadge}</>}
           <span style={{ fontSize: 11, fontWeight: WT.wEmph, color: nameColor, flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{fmtMin(start)}</span>
           <span style={{ fontSize: 11, fontWeight: WT.wEmph, color: nameColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 'none', maxWidth: '48%', textDecoration: cancelled ? 'line-through' : 'none' }}>{pt.name}</span>
-          <span style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>· {apptProcName(a)}{showConv ? ` · ${conv}` : ''}</span>
+          <span style={{ fontSize: 11, color: soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>· {apptProcName(a)}{showConv ? ` · ${conv}` : ''}</span>
           {flags.map(f => <FlagPill key={f.key} icon={f.icon} label={f.label} color={f.color} compact />)}
         </div>
       ) : mid ? (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 'none' }}>
-            <StatusSmartTag a={a} size="s" />
+            <StatusSmartTag a={a} size="s" mono={strong} />
             {proBadge}
             {conflict && <WIcon name="alert-triangle" size={12} color={WT.danger} style={{ flex: 'none' }} />}
             <span style={{ fontSize: 12, fontWeight: WT.wHead, color: nameColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, textDecoration: cancelled ? 'line-through' : 'none' }}>{pt.name}</span>
             {flags.map(f => <FlagPill key={f.key} icon={f.icon} label={f.label} color={f.color} compact />)}
-            {showConv && <span style={{ fontSize: 10.5, fontWeight: WT.wEmph, color: WT.muted, whiteSpace: 'nowrap', flex: 'none', maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv}</span>}
+            {showConv && <span style={{ fontSize: 10.5, fontWeight: WT.wEmph, color: soft, whiteSpace: 'nowrap', flex: 'none', maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv}</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 'none' }}>
-            <span style={{ fontSize: 11, color: WT.fg2, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{timeRange}</span>
-            <div style={{ minWidth: 0, flex: 1, display: 'flex' }}><ProcTag a={a} compact /></div>
+            <span style={{ fontSize: 11, color: soft, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{timeRange}</span>
+            <div style={{ minWidth: 0, flex: 1, display: 'flex' }}><ProcTag a={a} compact mono={soft} /></div>
           </div>
         </>
       ) : (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 'none' }}>
-            <StatusSmartTag a={a} size={height >= 78 ? 'm' : 's'} />
+            <StatusSmartTag a={a} size={height >= 78 ? 'm' : 's'} mono={strong} />
             <span style={{ flex: 1 }} />
             {conflict && <WIcon name="alert-triangle" size={13} color={WT.danger} style={{ flex: 'none' }} />}
             {convTag}
@@ -194,17 +202,17 @@ function AppointmentCard({ ev, top, height, leftPct, widthPct, gutter = 0, cardS
             {proBadge}
             <span style={{ fontSize: 12.5, fontWeight: WT.wHead, color: nameColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, textDecoration: cancelled ? 'line-through' : 'none' }}>{pt.name}</span>
             {flags.map(f => <FlagPill key={f.key} icon={f.icon} label={f.label} color={f.color} compact={flags.length > 1} />)}
-            {a.note && <WIcon name="sticky-note" size={11} color={WT.warning} style={{ flex: 'none' }} />}
+            {a.note && <WIcon name="sticky-note" size={11} color={soft} style={{ flex: 'none' }} />}
           </div>
           {narrow ? (
             <>
-              <div style={{ fontSize: 11, color: WT.fg2, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeRange}</div>
-              <div style={{ display: 'flex', minWidth: 0, flex: 'none' }}><ProcTag a={a} compact /></div>
+              <div style={{ fontSize: 11, color: soft, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeRange}</div>
+              <div style={{ display: 'flex', minWidth: 0, flex: 'none' }}><ProcTag a={a} compact mono={soft} /></div>
             </>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 'none' }}>
-              <span style={{ fontSize: 11, color: WT.fg2, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{timeRange}</span>
-              <div style={{ minWidth: 0, flex: 1, display: 'flex' }}><ProcTag a={a} compact /></div>
+              <span style={{ fontSize: 11, color: soft, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{timeRange}</span>
+              <div style={{ minWidth: 0, flex: 1, display: 'flex' }}><ProcTag a={a} compact mono={soft} /></div>
             </div>
           )}
         </>
@@ -219,18 +227,18 @@ function BlockCard({ block, top, height, onOpen }) {
   const tall = height > 30;
   return (
     <button onClick={() => onOpen && onOpen(block)} title={`Bloqueio · ${block.titulo || ''} ${block.start}–${block.end}${rec ? ' · ' + rec : ''}`} style={{
-      position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'left',
-      border: 'none', borderLeft: '3px solid #c0392b', borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
-      background: '#f6dcd7',
-      display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: tall ? 'flex-start' : 'center', justifyContent: 'center', gap: tall ? 1 : 6, padding: tall ? '4px 8px' : '0 8px', fontFamily: WT.font,
+      position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'center',
+      border: `1px solid ${WT.border}`, borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
+      background: 'repeating-linear-gradient(135deg,#f6f7f7,#f6f7f7 6px,#e6e9e9 6px,#e6e9e9 12px)',
+      display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: tall ? 1 : 6, padding: tall ? '4px 8px' : '0 8px', fontFamily: WT.font,
     }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>
-        <WIcon name="ban" size={13} color="#a4271c" style={{ flex: 'none' }} />
-        <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: '#a4271c', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.titulo || 'Bloqueio'}</span>
+        <WIcon name="lock" size={12} color={WT.fg2} style={{ flex: 'none' }} />
+        <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.titulo || 'Bloqueio'}</span>
       </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#a4271ccc', whiteSpace: 'nowrap' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
         {block.allDay ? 'Dia inteiro' : `${block.start}–${block.end}`}
-        {rec && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0 5px', height: 14, borderRadius: WT.pill, background: '#c0392b22', color: '#a4271c', fontWeight: WT.wEmph, fontSize: 10 }}><WIcon name="repeat" size={9} color="#a4271c" />{rec}</span>}
+        {rec && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0 5px', height: 14, borderRadius: WT.pill, background: WT.neutral, color: WT.fg2, fontWeight: WT.wEmph, fontSize: 10 }}><WIcon name="repeat" size={9} color={WT.fg2} />{rec}</span>}
       </span>
     </button>
   );
@@ -242,16 +250,16 @@ function BlockGroupCard({ group, top, height, onOpen }) {
   const n = group.blocks.length;
   return (
     <button onClick={onOpen} title={`${n} bloqueios neste horário — clique para escolher qual editar`} style={{
-      position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'left',
-      border: 'none', borderLeft: '3px solid #c0392b', borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
-      background: '#f6dcd7',
-      display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: tall ? 'flex-start' : 'center', justifyContent: 'center', gap: tall ? 2 : 6, padding: tall ? '5px 8px' : '0 8px', fontFamily: WT.font,
+      position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'center',
+      border: `1px solid ${WT.border}`, borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
+      background: 'repeating-linear-gradient(135deg,#f6f7f7,#f6f7f7 6px,#e6e9e9 6px,#e6e9e9 12px)',
+      display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: tall ? 2 : 6, padding: tall ? '5px 8px' : '0 8px', fontFamily: WT.font,
     }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>
-        <WIcon name="layers" size={13} color="#a4271c" style={{ flex: 'none' }} />
-        <span style={{ fontSize: 12, fontWeight: WT.wHead, color: '#a4271c', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n} bloqueios</span>
+        <WIcon name="layers" size={13} color={WT.fg2} style={{ flex: 'none' }} />
+        <span style={{ fontSize: 12, fontWeight: WT.wHead, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n} bloqueios</span>
       </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#a4271ccc', whiteSpace: 'nowrap' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
         {fmtMin(group.s)}–{fmtMin(group.e)}
       </span>
     </button>
@@ -259,16 +267,20 @@ function BlockGroupCard({ group, top, height, onOpen }) {
 }
 
 // ---- Interval (grade break — mandatory, same concept as block, orange) ------
-function IntervalCard({ top, height }) {
+function IntervalCard({ top, height, label, start, end }) {
+  const tall = height > 34;
   return (
-    <div title="Intervalo (mandatório)" style={{
+    <div title={`${label || 'Intervalo'} (mandatório)${start ? ` · ${start}–${end}` : ''}`} style={{
       position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2,
-      border: 'none', borderLeft: '3px solid #d99a2e', borderRadius: WT.rM, cursor: 'not-allowed', overflow: 'hidden',
-      background: '#fbe6c4',
-      display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px', fontFamily: WT.font,
+      border: '1px solid #eecb92', borderRadius: WT.rM, cursor: 'not-allowed', overflow: 'hidden',
+      background: '#fbe3b8',
+      display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: tall ? 1 : 6, padding: '0 8px', fontFamily: WT.font,
     }}>
-      <WIcon name="coffee" size={13} color="#a9701a" />
-      {height > 16 && <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: '#8a5a14', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Intervalo</span>}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>
+        <WIcon name="clock" size={12} color="#8a5a14" style={{ flex: 'none' }} />
+        {height > 16 && <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: '#8a5a14', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label || 'Intervalo'}</span>}
+      </span>
+      {tall && start && <span style={{ fontSize: 11, color: '#8a5a14cc', fontVariantNumeric: 'tabular-nums' }}>{start}–{end}</span>}
     </div>
   );
 }
@@ -327,6 +339,42 @@ function GhostSlot({ top, height, onClick, dropping, parallel, gutter = 0 }) {
   );
 }
 
+// ---- Status select (cabeçalho do card de contexto) --------------------------
+function StatusSelect({ a }) {
+  const st = STATUS[a.status] || STATUS.marcado;
+  const ref = React.useRef(null);
+  const [open, setOpen] = React.useState(false);
+  const [rect, setRect] = React.useState(null);
+  const toggle = e => { e.stopPropagation(); if (ref.current) setRect(ref.current.getBoundingClientRect()); setOpen(o => !o); };
+  const choose = (e, key) => { e.stopPropagation(); setOpen(false); if (window.__onSetStatus) window.__onSetStatus(a, key); };
+  return (
+    <button ref={ref} onClick={toggle} title="Alterar status"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: '0 8px 0 10px', borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff', boxShadow: WT.shEmphasis, cursor: 'pointer', fontFamily: WT.font, maxWidth: 190 }}>
+      <WIcon name={st.icon} size={14} color={st.fg} strokeWidth={2.2} style={{ flex: 'none' }} />
+      <span style={{ fontSize: 13.5, fontWeight: WT.wEmph, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.label}</span>
+      <WIcon name="chevrons-up-down" size={13} color={WT.muted} style={{ flex: 'none' }} />
+      {open && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 4000 }} onMouseDown={e => { e.stopPropagation(); setOpen(false); }} onClick={e => e.stopPropagation()}>
+          <div onMouseDown={e => e.stopPropagation()} style={{ position: 'fixed', top: Math.min((rect ? rect.bottom : 0) + 5, window.innerHeight - 320), left: Math.min(rect ? rect.left : 0, window.innerWidth - 210), width: 196, maxHeight: 316, overflow: 'auto', background: WT.raised, border: `1px solid ${WT.border}`, borderRadius: WT.rM, boxShadow: WT.shPopout, padding: 5, fontFamily: WT.font }}>
+            {STATUS_ORDER.map(key => {
+              const s = STATUS[key]; const active = key === a.status;
+              return (
+                <button key={key} onClick={e => choose(e, key)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', border: 'none', borderRadius: WT.rS, background: active ? WT.hover : 'transparent', cursor: 'pointer', fontFamily: WT.font }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = WT.hover; }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
+                  <WIcon name={s.icon} size={14} color={s.fg} strokeWidth={2.2} style={{ flex: 'none' }} />
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: active ? WT.wHead : WT.wBody, color: WT.fg }}>{s.label}</span>
+                  {active && <WIcon name="check" size={14} color={WT.accent} style={{ flex: 'none' }} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>, document.body)}
+    </button>
+  );
+}
+
 // ---- Context card (M6) ------------------------------------------------------
 function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel, onOpen, onRetorno }) {
   const pt = patientById(a.pt) || { name: a.pt };
@@ -340,74 +388,97 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
       <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
     </div>
   );
+  const list = apptProcList(a);
+  const Sec = ({ children, first }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 16px', borderTop: first ? 'none' : `1px solid ${WT.borderSub}` }}>{children}</div>
+  );
+  const MetaRow = ({ icon, children, right, color }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: color || WT.fg, minWidth: 0 }}>
+      <WIcon name={icon} size={15} color={WT.fg2} style={{ flex: 'none' }} />
+      <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
+      {right && <span style={{ flex: 'none', fontSize: 13, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>{right}</span>}
+    </div>
+  );
+  const ns = notifSummary(a);
   return (
-    <WPopover anchorRect={anchorRect} onClose={onClose} width={320}>
-      <div style={{ height: 4, background: t.bar, flex: 'none' }} />
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <WAvatar initials={pt.name.split(' ').map(w => w[0]).slice(0, 2).join('')} size={40} bg={pro.color || WT.accent} color="#fff" ring={pro.color || WT.borderAccent} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 15, fontWeight: WT.wHead, color: WT.fg }}>{pt.name}</span>
-              {pt.firstVisit && <WBadge type="accent">1ª vez</WBadge>}
-            </div>
-            <div style={{ fontSize: 12, color: WT.muted, marginTop: 2 }}>{pt.phone}</div>
-          </div>
-          <WIconButton name="x" dim={28} onClick={onClose} />
+    <WPopover anchorRect={anchorRect} onClose={onClose} width={340}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {/* cabeçalho: status editável + ações */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '12px 12px 0 16px' }}>
+          <StatusSelect a={a} />
+          <span style={{ flex: 1 }} />
+          <WIconButton name="trash-2" dim={30} onClick={() => onCancel(a)} title="Cancelar agendamento" color={WT.dangerFill} />
+          <WIconButton name="pencil" dim={30} onClick={() => onOpen(a)} title="Editar agendamento" />
+          <WIconButton name="x" dim={30} onClick={onClose} title="Fechar" />
         </div>
 
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <WBadge type={st.badge} icon={st.icon}>{st.label}</WBadge>
-          <WBadge type="neutral" icon="circle" style={{ color: t.fg }}><span style={{ color: t.fg }}>{t.label}</span></WBadge>
-          {a.fitIn && <WBadge type="warning" icon="git-merge">Encaixe</WBadge>}
-          {a.paid && <WBadge type="success" icon="banknote">Pago</WBadge>}
-          {pt.priority && PRIORITIES[pt.priority] && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 9px', borderRadius: WT.pill, background: '#fff', border: `1px solid ${FLAG_VIOLET}`, color: FLAG_VIOLET, fontSize: 12, fontWeight: WT.wHead }}>
-              <WIcon name={PRIORITIES[pt.priority].icon} size={13} color={FLAG_VIOLET} strokeWidth={2.5} />{PRIORITIES[pt.priority].label}
-            </span>
+        {/* identidade */}
+        <div style={{ padding: '10px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 21, fontWeight: WT.wXbold, color: WT.fg, letterSpacing: '-.01em', lineHeight: 1.2 }}>{pt.name}</span>
+          {pt.phone && <span style={{ fontSize: 14, color: WT.fg2, fontVariantNumeric: 'tabular-nums' }}>{pt.phone}</span>}
+          {(pt.firstVisit || a.fitIn || a.paid || (pt.priority && PRIORITIES[pt.priority])) && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              {pt.firstVisit && <WBadge type="accent">1ª vez</WBadge>}
+              {pt.priority && PRIORITIES[pt.priority] && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 9px', borderRadius: WT.pill, background: '#fff', border: `1px solid ${FLAG_VIOLET}`, color: FLAG_VIOLET, fontSize: 12, fontWeight: WT.wHead }}>
+                  <WIcon name={PRIORITIES[pt.priority].icon} size={13} color={FLAG_VIOLET} strokeWidth={2.5} />{PRIORITIES[pt.priority].label}
+                </span>
+              )}
+              {a.fitIn && <WBadge type="warning" icon="git-merge">Encaixe</WBadge>}
+              {a.paid && <WBadge type="success" icon="banknote">Pago</WBadge>}
+            </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 0', borderTop: `1px solid ${WT.borderSub}`, borderBottom: `1px solid ${WT.borderSub}` }}>
-          {(() => { const list = apptProcList(a); return list.length <= 1
-            ? <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><WIcon name="clipboard-list" size={15} color={WT.muted} style={{ flex: 'none' }} /><span style={{ display: 'inline-flex', alignItems: 'center', height: 22, background: t.tint, borderLeft: `3px solid ${t.bar}`, borderRadius: '3px 6px 6px 3px', padding: '0 10px 0 8px', fontSize: 13, fontWeight: WT.wEmph, color: t.fg }}>{(list[0] || {}).name || apptProcName(a)}</span></div>
-            : <div style={{ display: 'flex', gap: 10 }}><WIcon name="clipboard-list" size={15} color={WT.muted} style={{ marginTop: 2, flex: 'none' }} /><div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: WT.fg }}><span style={{ fontWeight: WT.wEmph }}>{list.length} procedimentos</span>{list.map((p, i) => <span key={i} style={{ display: 'inline-flex', alignItems: 'center', height: 20, background: t.tint, borderLeft: `3px solid ${t.bar}`, borderRadius: '3px 6px 6px 3px', padding: '0 9px 0 7px', color: t.fg }}>{p.name} · {p.dur} min</span>)}</div></div>;
-          })()}
-          <Row icon="clock">{fmtMin(toMin(a.start))}–{end} · {a.dur} min</Row>
-          <Row icon="user-round">{pro.name}{pro.spec ? ` · ${pro.spec}` : ''}</Row>
-          {!window.__mvp && <Row icon="shield-check">{a.conv}{a.plano ? '' : ' (particular)'}</Row>}
-          <Row icon="banknote"><strong style={{ fontWeight: WT.wHead }}>{a.price ? brl(a.price) : 'Sem cobrança'}</strong></Row>
-          {a.note && <Row icon="sticky-note"><span style={{ color: WT.fg2 }}>{a.note}</span></Row>}
-          {a.reason && a.status === 'cancelado' && <Row icon="info"><span style={{ color: WT.danger }}>{a.reason}</span></Row>}
-          {a.reason && a.status === 'remarcado' && <Row icon="calendar-clock"><span style={{ color: STATUS.remarcado.fg }}>{a.reason}</span></Row>}
-          {(() => {
-            const ns = notifSummary(a);
-            if (!ns.total) return null;
-            const ok = ns.received > 0;
-            const color = ns.failed && !ok ? WT.danger : (ok ? WT.success : WT.muted);
-            const icon = ns.failed && !ok ? 'bell-off' : (ok ? 'bell-ring' : 'bell');
-            const text = ok
-              ? `${ns.received} notificaç${ns.received > 1 ? 'ões recebidas' : 'ão recebida'}`
-              : (ns.sent > 0 ? 'Enviada(s), sem confirmação de recebimento' : `${ns.scheduled} notificação${ns.scheduled > 1 ? 's' : ''} agendada${ns.scheduled > 1 ? 's' : ''}`);
-            return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                <WIcon name={icon} size={15} color={color} style={{ flex: 'none' }} />
-                <span style={{ flex: 1, minWidth: 0, color: WT.fg }}>{text}{ns.confirmed ? ' · presença confirmada' : ''}</span>
-                {ok && ns.scheduled > 0 && <span style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap' }}>+{ns.scheduled} agendada{ns.scheduled > 1 ? 's' : ''}</span>}
-              </div>
-            );
-          })()}
-        </div>
+        {/* horário · procedimentos · profissional */}
+        <Sec>
+          <MetaRow icon="clock" right={`(${a.dur} min)`}>{fmtMin(toMin(a.start))} <span style={{ color: WT.muted }}>→</span> {end}</MetaRow>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <WIcon name="stethoscope" size={15} color={WT.fg2} style={{ flex: 'none', marginTop: 3 }} />
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(list.length ? list : [{ name: apptProcName(a), dur: a.dur }]).map((p, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: WT.fg, minWidth: 0 }}>
+                  <span style={{ width: 11, height: 11, borderRadius: 3, background: (p.color || t.bar), flex: 'none' }} />
+                  <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                  <span style={{ flex: 'none', fontSize: 13, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>{p.dur} min</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: WT.fg }}>
+            <WProfileAvatar src={pro.photo} size={20} icon={pro.spec ? 'user-round' : 'activity'} />
+            <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pro.short || pro.name}</span>
+          </div>
+          {a.note && <MetaRow icon="sticky-note" color={WT.fg2}>{a.note}</MetaRow>}
+          {a.reason && a.status === 'cancelado' && <MetaRow icon="info" color={WT.danger}>{a.reason}</MetaRow>}
+          {a.reason && a.status === 'remarcado' && <MetaRow icon="calendar-clock" color={STATUS.remarcado.fg}>{a.reason}</MetaRow>}
+        </Sec>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        {/* convênio · cobrança */}
+        <Sec>
+          {!window.__mvp && <MetaRow icon="shield-check">{a.conv}{a.plano ? '' : ' (particular)'}</MetaRow>}
+          <MetaRow icon="banknote">{a.price ? brl(a.price) : 'Sem cobrança'}</MetaRow>
+        </Sec>
+
+        {/* notificações */}
+        {ns.total > 0 && (() => {
+          const ok = ns.received > 0;
+          const color = ns.failed && !ok ? WT.danger : WT.fg;
+          const icon = ns.failed && !ok ? 'bell-off' : (ok ? 'bell-ring' : 'bell');
+          const text = ok
+            ? `${ns.received} notificaç${ns.received > 1 ? 'ões recebidas' : 'ão recebida'}`
+            : (ns.sent > 0 ? 'Enviada(s), sem confirmação de recebimento' : `${ns.scheduled} notificação${ns.scheduled > 1 ? 's' : ''} agendada${ns.scheduled > 1 ? 's' : ''}`);
+          return <Sec><MetaRow icon={icon} color={color} right={ok && ns.scheduled > 0 ? `+${ns.scheduled}` : null}>{text}{ns.confirmed ? ' · presença confirmada' : ''}</MetaRow></Sec>;
+        })()}
+
+        {/* ações */}
+        <div style={{ display: 'grid', gridTemplateColumns: showRetorno ? '1fr 1fr' : '1fr', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}` }}>
           <WButton variant="default" leadingIcon="calendar-clock" label="Remarcar" onClick={() => onReschedule(a)} />
-          <WButton variant="default" leadingIcon="x-circle" label="Cancelar" onClick={() => onCancel(a)} />
-          {showRetorno && <WButton variant="default" leadingIcon="rotate-ccw" label="Retorno" onClick={() => onRetorno && onRetorno(a)} />}
-          <WButton variant="primary" leadingIcon="external-link" label="Abrir" onClick={() => onOpen(a)} style={showRetorno ? undefined : { gridColumn: 'span 2' }} />
+          {showRetorno && <WButton variant="default" label="Retorno" onClick={() => onRetorno && onRetorno(a)} />}
         </div>
       </div>
     </WPopover>
   );
 }
 
-Object.assign(window, { laneLayout, apptType, apptProcName, StatusSmartTag, ProcTag, AppointmentCard, BlockCard, BlockGroupCard, IntervalCard, FreeSlot, GhostSlot, ContextCard });
+Object.assign(window, { laneLayout, apptType, apptProcName, StatusSmartTag, ProcTag, AppointmentCard, BlockCard, BlockGroupCard, IntervalCard, FreeSlot, GhostSlot, ContextCard, StatusSelect });

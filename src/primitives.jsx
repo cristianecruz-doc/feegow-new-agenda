@@ -106,6 +106,21 @@ function WAvatar({ initials, size = 32, color, bg, ring, style = {} }) {
   );
 }
 
+// foto de perfil (neutra) — usa a foto do profissional quando existir, senão um ícone
+function WProfileAvatar({ src, size = 30, icon = 'user-round', style = {}, title }) {
+  return (
+    <span title={title} style={{
+      width: size, height: size, borderRadius: '50%', flex: 'none', overflow: 'hidden',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      background: WT.inset, border: `1px solid ${WT.border}`, ...style,
+    }}>
+      {src
+        ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : <WIcon name={icon} size={Math.round(size * 0.55)} color={WT.muted} />}
+    </span>
+  );
+}
+
 // ---- Card -------------------------------------------------------------------
 function WCard({ variant = 'raised', padding = 16, children, style = {} }) {
   return (
@@ -367,6 +382,6 @@ function WToast({ toast }) {
 }
 
 Object.assign(window, {
-  WIcon, WButton, WIconButton, WBadge, WAvatar, WCard, WLabel, WInput, WTextarea,
+  WIcon, WButton, WIconButton, WBadge, WAvatar, WProfileAvatar, WCard, WLabel, WInput, WTextarea,
   WSelect, WCheckbox, WRadio, WToggle, WSegmented, WDivider, WSpinner, WPopover, WToast,
 });

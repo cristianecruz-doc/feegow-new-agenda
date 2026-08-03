@@ -84,21 +84,44 @@ function occupancyOf(appts, startMin, endMin, blocks) {
 }
 
 // ---- Column header ----------------------------------------------------------
-function ColHeader({ entity, sub, occupancy, onPick }) {
+function ColHeader({ entity, sub, subParts, occupancy, onPick }) {
+  const icon = entity.kindIcon || 'user-round';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', minWidth: 0 }}>
-      {entity.initials && <WAvatar initials={entity.initials} size={30} bg={entity.color || WT.accent} color="#fff" ring="transparent" />}
+      <WProfileAvatar src={entity.photo} size={30} icon={icon} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
           <span style={{ fontSize: 13, fontWeight: WT.wEmph, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entity.short || entity.name || entity.label}</span>
           {entity.doctoralia && <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" title="Profissional integrado à Doctoralia" style={{ width: 14, height: 14, flex: 'none' }} />}
         </div>
-        {sub && <div style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
+        {subParts && subParts.length
+          ? <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              {subParts.filter(p => p.text).map((p, i) => (
+                <span key={i} title={p.text} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, minWidth: 0, fontSize: 11, color: WT.muted }}>
+                  <WIcon name={p.icon} size={11} color={WT.muted} style={{ flex: 'none' }} />
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.text}</span>
+                </span>
+              ))}
+            </div>
+          : sub && <div style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
       </div>
-      {occupancy != null && !window.__mvp && (
-        <WBadge type={occupancy >= 80 ? 'danger' : occupancy >= 50 ? 'warning' : 'success'} style={{ flex: 'none' }}>{occupancy}%</WBadge>
-      )}
+      {occupancy != null && !window.__mvp && <OccupancyRing pct={occupancy} />}
     </div>
+  );
+}
+
+// ---- Ocupação do dia: anel de progresso (quão cheio o dia está) -------------
+function OccupancyRing({ pct, size = 26 }) {
+  const c = pct >= 80 ? WT.danger : pct >= 50 ? '#c98a00' : WT.successFill;
+  const r = (size - 4) / 2, C = 2 * Math.PI * r;
+  return (
+    <span title={`Dia ${pct}% ocupado`} style={{ flex: 'none', position: 'relative', width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'help' }}>
+      <svg width={size} height={size} style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={WT.borderSub} strokeWidth={3.5} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={c} strokeWidth={3.5} strokeLinecap="round" strokeDasharray={`${C * pct / 100} ${C}`} />
+      </svg>
+      <span style={{ fontSize: 8.5, fontWeight: WT.wXbold, color: c, fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em' }}>{pct}</span>
+    </span>
   );
 }
 
@@ -115,24 +138,27 @@ function groupOverlapBlocks(blocks) {
   });
   return groups;
 }
-// cabeçalho da faixa de grade — mostra "Disponível em Doctoralia" quando há espaço; senão só o ícone
+// cabeçalho da faixa de grade — aba sólida na cor da grade, ancorada acima do 1º slot
 function GradeBandHeader({ g, HEADER_H }) {
   const ref = React.useRef(null);
   const [wide, setWide] = React.useState(false);
   React.useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
-    const check = () => setWide(el.clientWidth >= 240);
+    const check = () => setWide(el.clientWidth >= 260);
     check();
     let ro; if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(check); ro.observe(el); }
     return () => ro && ro.disconnect();
   }, []);
+  const name = g.label ? `${g.label}${g.room ? ' · ' + roomShort(g.room) : ''}` : (g.room ? `${g.room} · Unidade Centro` : 'Unidade Centro');
   return (
-    <div ref={ref} style={{ position: 'absolute', top: -HEADER_H, left: 0, right: 0, height: HEADER_H, background: `color-mix(in srgb, ${g.color} 15%, #fff)`, border: `1px solid ${g.color}3d`, borderLeft: `3px solid ${g.color}`, borderRadius: `${WT.rS} ${WT.rS} 0 0`, display: 'flex', alignItems: 'center', gap: 5, padding: '0 6px 0 8px', zIndex: 2 }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: g.color, flex: 'none' }} />
-      <span style={{ fontSize: 12, fontWeight: WT.wXbold, color: g.color, letterSpacing: '.01em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.label ? `${g.label}${g.room ? ' · ' + roomShort(g.room) : ''}` : (g.room ? `${g.room} · Unidade Centro` : 'Unidade Centro')}</span>
+    <div ref={ref} style={{ position: 'absolute', top: -HEADER_H, left: 0, right: 0, height: HEADER_H, display: 'flex', alignItems: 'flex-end', gap: 4, zIndex: 2, pointerEvents: 'none' }}>
+      <span title={`Grade: ${name} · ${g.start}–${g.end}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: g.doctoralia ? '72%' : '100%', height: HEADER_H, padding: '0 8px', background: g.color, borderRadius: `${WT.rS} ${WT.rS} 0 0`, pointerEvents: 'auto' }}>
+        <WIcon name="calendar-check" size={11} color="#fff" style={{ flex: 'none', opacity: 0.9 }} />
+        <span style={{ fontSize: 11.5, fontWeight: WT.wXbold, color: '#fff', letterSpacing: '.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+      </span>
       <span style={{ flex: 1 }} />
       {g.doctoralia && (
-        <span title="Disponível em Doctoralia" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', cursor: 'help' }}>
+        <span title="Disponível em Doctoralia" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', height: HEADER_H, cursor: 'help', pointerEvents: 'auto', paddingRight: 4 }}>
           {wide && <span style={{ fontSize: 11, fontWeight: WT.wXbold, color: '#00847e', whiteSpace: 'nowrap' }}>Disponível em Doctoralia</span>}
           <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" style={{ width: 15, height: 15, display: 'block' }} />
         </span>
@@ -190,22 +216,22 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
       onDragOver={e => { if (drag.appt) { e.preventDefault(); drag.setMin(colId, minFromY(e.clientY)); } }}
       onDrop={e => { if (drag.appt) { e.preventDefault(); const m = minFromY(e.clientY); if (rangeBlocked(m, drag.appt.dur || slotMin)) { drag.end(); return; } drag.onDrop(colId, m); } }}
     >
-      {/* outside the doctor's availability grade = indisponível (subtle hatch) */}
+      {/* fora da grade do profissional = sem disponibilidade (fundo cinza sólido) */}
       {hasCoverage && rangeGaps(coverRanges, startMin, endMin).map(([s, e], i) => (
-        <div key={'ng' + i} title="Sem disponibilidade para agendamento" style={{ position: 'absolute', left: 0, right: 0, top: (s - startMin) * pxPerMin, height: (e - s) * pxPerMin, background: 'repeating-linear-gradient(135deg,#fafbfb,#fafbfb 4px,#eef0f0 4px,#eef0f0 5px)', zIndex: 0 }} />
+        <div key={'ng' + i} title="Sem grade — fora da disponibilidade do profissional" style={{ position: 'absolute', left: 0, right: 0, top: (s - startMin) * pxPerMin, height: (e - s) * pxPerMin, background: '#eef0f0', zIndex: 0 }} />
       ))}
-      {/* availability grade bands (doctor's color) — só barrinha lateral, sem fundo */}
+      {/* faixas com grade — fundo branco + tint da cor da grade e barra lateral */}
       {activeGrades.map((g, i) => {
         const gh = (toMin(g.end) - toMin(g.start)) * pxPerMin;
         return (
-          <div key={'g' + i} title={`${g.label || 'Disponível'} · ${g.start}–${g.end}${g.room ? ' · ' + g.room : ''} · intervalo ${g.slotMin} min`} style={{ position: 'absolute', left: 0, right: 0, top: (toMin(g.start) - startMin) * pxPerMin, height: gh, borderLeft: `3px solid ${g.color}`, zIndex: 0 }}>
+          <div key={'g' + i} title={`${g.label || 'Disponível'} · ${g.start}–${g.end}${g.room ? ' · ' + g.room : ''} · intervalo ${g.slotMin} min`} style={{ position: 'absolute', left: 0, right: 0, top: (toMin(g.start) - startMin) * pxPerMin, height: gh, background: '#fff', borderLeft: `3px solid ${g.color}`, borderTop: `2px solid ${g.color}`, zIndex: 0 }}>
             {(g.label || g.room || g.doctoralia) && <GradeBandHeader g={g} HEADER_H={HEADER_H} />}
           </div>
         );
       })}
       {/* intervalos da grade (mandatórios) — ocultos sob um bloqueio; reaparecem ao excluí-lo */}
       {intervals.flatMap((iv, i) => subtractRanges([toMin(iv.start), toMin(iv.end)], (blocks || []).map(b => [toMin(b.start), toMin(b.end)])).map(([s, e], j) => (
-        <IntervalCard key={'iv' + i + '_' + j} top={(s - startMin) * pxPerMin} height={(e - s) * pxPerMin - 2} />
+        <IntervalCard key={'iv' + i + '_' + j} top={(s - startMin) * pxPerMin} height={(e - s) * pxPerMin - 2} label={iv.label} start={fmtMin(s)} end={fmtMin(e)} />
       )))}
 
       {/* hour gridlines */}
@@ -303,7 +329,7 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, cardStyle, f
           <div style={{ width: gutterW, flex: 'none' }} />
           {columns.map((c, i) => (
             <div key={c.id} style={{ flex: 1, minWidth: colMinWidth, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
-              {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} occupancy={c.occupancy} />}
+              {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} subParts={c.subParts} occupancy={c.occupancy} />}
             </div>
           ))}
         </div>
@@ -463,7 +489,11 @@ function buildResourceColumn(res, appts, blocks, date, conf) {
   const kindLabel = res.kind === 'pro' ? null : res.kind === 'equip' ? 'Equipamento' : 'Sala';
   const proRooms = res.kind === 'pro' ? proRoomsOn(res.id, date) : [];
   const roomSub = proRooms.length ? proRooms.map(roomShort).join(' / ') : (meta.room || '');
-  return { id: `${res.kind}:${res.id}`, date, appts: ca, blocks: cb, entity: meta, sub: kindLabel ? `${kindLabel} · ${meta.spec}` : `${specLabel(meta)} · ${roomSub}`, kind: res.kind, showPro: res.kind !== 'pro',
+  return { id: `${res.kind}:${res.id}`, date, appts: ca, blocks: cb, entity: { ...meta, kindIcon: res.kind === 'pro' ? 'user-round' : res.kind === 'equip' ? 'activity' : 'door-open' }, sub: kindLabel ? `${kindLabel} · ${meta.spec}` : `${specLabel(meta)} · ${roomSub}`,
+    subParts: kindLabel
+      ? [{ icon: res.kind === 'equip' ? 'activity' : 'door-open', text: kindLabel }, { icon: 'stethoscope', text: meta.spec }]
+      : [{ icon: 'stethoscope', text: specLabel(meta) }, { icon: 'door-open', text: roomSub }],
+    kind: res.kind, showPro: res.kind !== 'pro',
     grades: res.kind === 'pro' ? gradesFor(res.id, date) : null,
     occupancy: occupancyOf(ca, conf.startMin, conf.endMin, cb) };
 }
@@ -515,8 +545,8 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date })
         <button key={it.id} onClick={() => onToggle({ kind, id: it.id })} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 12px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font }}
           onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
           <span style={{ width: 16, height: 16, borderRadius: WT.rS, flex: 'none', border: `1.5px solid ${on ? WT.accentFill : WT.borderHover}`, background: on ? WT.accentFill : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{on && <WIcon name="check" size={12} color="#fff" strokeWidth={3} />}</span>
-          <WAvatar initials={it.initials} size={24} bg={(it.color || WT.accent) + '22'} color={it.color || WT.accent} ring="transparent" />
-          <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 13, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.short || it.name}</span><span style={{ display: 'block', fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</span></span>
+          <WProfileAvatar src={it.photo} size={24} icon={kind === 'pro' ? 'user-round' : kind === 'equip' ? 'activity' : 'door-open'} />
+          <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 13, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.short || it.name}</span><span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: WT.muted, minWidth: 0 }}><WIcon name={kind === 'pro' ? 'stethoscope' : 'tag'} size={10} color={WT.muted} style={{ flex: 'none' }} /><span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</span></span></span>
         </button>
       ); })}
     </div>
@@ -667,7 +697,7 @@ function EquipmentView({ state, set, appts, blocks, drag, onSlotClick, onCardOpe
     const e = EQUIP.find(x => x.id === res.id); if (!e) return null;
     const ca = appts.filter(a => a.date === state.date && a.equip === e.id);
     const cb = blocks.filter(b => blockOnDate(b, state.date) && (b.equips || []).includes(e.id));
-    return { id: e.id, date: state.date, appts: ca, blocks: cb, entity: e, sub: e.spec, showPro: true, bookable: colBookable({ kind: 'equip', entity: e }, state.filters), occupancy: occupancyOf(ca, conf.startMin, conf.endMin, cb) };
+    return { id: e.id, date: state.date, appts: ca, blocks: cb, entity: { ...e, kindIcon: 'activity' }, sub: e.spec, subParts: [{ icon: 'activity', text: 'Equipamento' }, { icon: 'stethoscope', text: e.spec }], showPro: true, bookable: colBookable({ kind: 'equip', entity: e }, state.filters), occupancy: occupancyOf(ca, conf.startMin, conf.endMin, cb) };
   }).filter(Boolean);
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -694,7 +724,7 @@ function RoomView({ state, appts, blocks, drag, onSlotClick, onCardOpen, onBlock
     const ca = appts.filter(a => a.date === state.date && effectiveRoom(a) === r.name);
     // bloqueios da clínica inteira (feriado) valem para todas as salas
     const cb = blocks.filter(b => blockOnDate(b, state.date) && b.scope === 'clinica');
-    return { id: `room:${r.id}`, date: state.date, appts: ca, blocks: cb, entity: r, sub: `Sala · ${r.spec}`, showPro: true,
+    return { id: `room:${r.id}`, date: state.date, appts: ca, blocks: cb, entity: { ...r, kindIcon: 'door-open' }, sub: `Sala · ${r.spec}`, subParts: [{ icon: 'door-open', text: 'Sala' }, { icon: 'stethoscope', text: r.spec }], showPro: true,
       occupancy: occupancyOf(ca, conf.startMin, conf.endMin, cb) };
   });
   return (
@@ -826,4 +856,4 @@ function MonthView({ state, set, appts, blocks }) {
   );
 }
 
-Object.assign(window, { NOW_MIN, filterAppts, visiblePros, occupancyOf, ColumnGrid, ColumnTrack, ColHeader, EmptyState, getGridConf, DayView, WeekView, MultipleView, EquipmentView, RoomView, ProgramacaoView, MonthView, ResourceBar, ResourcePicker, resourceMeta, agendaSelection, AgendaSidebarPanel });
+Object.assign(window, { NOW_MIN, filterAppts, visiblePros, occupancyOf, OccupancyRing, ColumnGrid, ColumnTrack, ColHeader, EmptyState, getGridConf, DayView, WeekView, MultipleView, EquipmentView, RoomView, ProgramacaoView, MonthView, ResourceBar, ResourcePicker, resourceMeta, agendaSelection, AgendaSidebarPanel });
