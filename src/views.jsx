@@ -224,11 +224,15 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
       {activeGrades.map((g, i) => {
         const gh = (toMin(g.end) - toMin(g.start)) * pxPerMin;
         return (
-          <div key={'g' + i} title={`${g.label || 'Disponível'} · ${g.start}–${g.end}${g.room ? ' · ' + g.room : ''} · intervalo ${g.slotMin} min`} style={{ position: 'absolute', left: 0, right: 0, top: (toMin(g.start) - startMin) * pxPerMin, height: gh, background: '#fff', borderLeft: `3px solid ${g.color}`, borderTop: `2px solid ${g.color}`, zIndex: 0 }}>
-            {(g.label || g.room || g.doctoralia) && <GradeBandHeader g={g} HEADER_H={HEADER_H} />}
-          </div>
+          <div key={'g' + i} title={`${g.label || 'Disponível'} · ${g.start}–${g.end}${g.room ? ' · ' + g.room : ''} · intervalo ${g.slotMin} min`} style={{ position: 'absolute', left: 0, right: 0, top: (toMin(g.start) - startMin) * pxPerMin, height: gh, background: '#fff', borderLeft: `3px solid ${g.color}`, borderTop: `2px solid ${g.color}`, zIndex: 0 }} />
         );
       })}
+      {/* rótulos das grades — fora da faixa para ficarem SEMPRE acima de bloqueios/intervalos */}
+      {activeGrades.filter(g => g.label || g.room || g.doctoralia).map((g, i) => (
+        <div key={'gh' + i} style={{ position: 'absolute', left: 0, right: 0, top: (toMin(g.start) - startMin) * pxPerMin, height: 0, zIndex: 7 }}>
+          <GradeBandHeader g={g} HEADER_H={HEADER_H} />
+        </div>
+      ))}
       {/* intervalos da grade (mandatórios) — ocultos sob um bloqueio; reaparecem ao excluí-lo */}
       {intervals.flatMap((iv, i) => subtractRanges([toMin(iv.start), toMin(iv.end)], (blocks || []).map(b => [toMin(b.start), toMin(b.end)])).map(([s, e], j) => (
         <IntervalCard key={'iv' + i + '_' + j} top={(s - startMin) * pxPerMin} height={(e - s) * pxPerMin - 2} label={iv.label} start={fmtMin(s)} end={fmtMin(e)} />

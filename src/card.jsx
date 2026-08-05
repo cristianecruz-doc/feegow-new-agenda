@@ -228,13 +228,13 @@ function BlockCard({ block, top, height, onOpen }) {
   return (
     <button onClick={() => onOpen && onOpen(block)} title={`Bloqueio · ${block.titulo || ''} ${block.start}–${block.end}${rec ? ' · ' + rec : ''}`} style={{
       position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'center',
-      border: `1px solid ${WT.border}`, borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
-      background: 'repeating-linear-gradient(135deg,#f6f7f7,#f6f7f7 6px,#e6e9e9 6px,#e6e9e9 12px)',
+      border: `1px solid ${WT.borderSub}`, borderRadius: WT.rS, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
+      background: 'repeating-linear-gradient(135deg,#fafbfb,#fafbfb 7px,#f0f2f2 7px,#f0f2f2 14px)',
       display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: tall ? 1 : 6, padding: tall ? '4px 8px' : '0 8px', fontFamily: WT.font,
     }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>
-        <WIcon name="lock" size={12} color={WT.fg2} style={{ flex: 'none' }} />
-        <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.titulo || 'Bloqueio'}</span>
+        <WIcon name="lock" size={11} color={WT.fg2} style={{ flex: 'none' }} />
+        <span style={{ fontSize: 11.5, fontWeight: WT.wEmph, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.titulo || 'Bloqueio'}</span>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
         {block.allDay ? 'Dia inteiro' : `${block.start}–${block.end}`}
@@ -251,8 +251,8 @@ function BlockGroupCard({ group, top, height, onOpen }) {
   return (
     <button onClick={onOpen} title={`${n} bloqueios neste horário — clique para escolher qual editar`} style={{
       position: 'absolute', top, height: Math.max(height, 16), left: 2, right: 2, textAlign: 'center',
-      border: `1px solid ${WT.border}`, borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
-      background: 'repeating-linear-gradient(135deg,#f6f7f7,#f6f7f7 6px,#e6e9e9 6px,#e6e9e9 12px)',
+      border: `1px solid ${WT.borderSub}`, borderRadius: WT.rS, cursor: 'pointer', overflow: 'hidden', zIndex: 3,
+      background: 'repeating-linear-gradient(135deg,#fafbfb,#fafbfb 7px,#f0f2f2 7px,#f0f2f2 14px)',
       display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: tall ? 2 : 6, padding: tall ? '5px 8px' : '0 8px', fontFamily: WT.font,
     }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>

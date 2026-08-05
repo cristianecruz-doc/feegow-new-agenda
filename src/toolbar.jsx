@@ -128,7 +128,7 @@ function Toolbar({ state, set, onNew, compact }) {
   const noResults = ql && !fProOpts.length && !fSpecs.length && !fConv.length && !fUnits.length && !fRooms.length && !fProcs.length;
 
   return (
-    <div style={{ flex: 'none', background: WT.bg, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+    <div style={{ flex: 'none', background: WT.raised, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
       {/* left: date navigation */}
       <WButton variant="default" label="Hoje" onClick={() => set({ date: TODAY })} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -162,7 +162,6 @@ function Toolbar({ state, set, onNew, compact }) {
       </button>
 
       <WIconButton name="sliders-horizontal" title="Configurações de visualização" active={pop && pop.kind === 'viewcfg'} onClick={e => open('viewcfg', e.currentTarget.getBoundingClientRect())} />
-      <WButton variant="primary" leadingIcon="plus" label={compact ? 'Novo' : 'Novo'} onClick={() => onNew()} />
 
       {pop && pop.kind === 'cal' && (
         <WPopover anchorRect={pop.rect} onClose={close} width={260} placement="below">

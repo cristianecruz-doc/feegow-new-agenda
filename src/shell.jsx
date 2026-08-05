@@ -276,20 +276,20 @@ function CreateButton({ collapsed, onCreate }) {
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
   }, [open]);
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} style={{ position: 'relative', flex: 'none' }}>
       <button onClick={() => setOpen(o => !o)} style={{
-        display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 46, cursor: 'pointer',
-        padding: collapsed ? 0 : '0 14px', justifyContent: collapsed ? 'center' : 'flex-start',
-        borderRadius: WT.rL, border: `1px solid ${WT.border}`, background: '#fff', boxShadow: WT.shEmphasis,
-        fontFamily: WT.font, fontSize: 15, fontWeight: WT.wHead, color: WT.fg,
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 38, cursor: 'pointer',
+        padding: collapsed ? 0 : '0 12px', justifyContent: 'center',
+        borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff', boxShadow: WT.shEmphasis,
+        fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, color: WT.fg,
       }}>
-        <WIcon name="plus" size={20} color={WT.accent} />
-        {!collapsed && <span style={{ flex: 1, textAlign: 'left' }}>Criar</span>}
-        {!collapsed && <WIcon name="chevron-down" size={16} />}
+        <WIcon name="plus" size={17} color={WT.accent} />
+        {!collapsed && <span>Criar</span>}
+        {!collapsed && <WIcon name="chevron-down" size={14} />}
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: 52, left: 0, width: collapsed ? 248 : '100%', minWidth: 248, zIndex: 60,
+          position: 'absolute', top: 44, left: 0, width: collapsed ? 248 : '100%', minWidth: 248, zIndex: 60,
           background: '#fff', border: `1px solid ${WT.border}`, borderRadius: WT.rL, boxShadow: WT.shPopout, overflow: 'hidden', padding: 6,
         }}>
           {CREATE_ITEMS.map(it => (
@@ -319,18 +319,18 @@ function Sidebar({ collapsed, onToggle, date, onSelectDate, onCreate, agendaSel 
   const [statusOpen, setStatusOpen] = React.useState(false); // legenda de status sempre inicia fechada
   return (
     <aside style={{
-      width: w, flex: 'none', background: WT.raised, borderRight: `1px solid ${WT.border}`,
-      display: 'flex', flexDirection: 'column', padding: '14px 12px', gap: 14, transition: 'width .16s', overflow: 'hidden',
+      width: w, flex: 'none', background: WT.bg, borderRight: `1px solid ${WT.border}`,
+      display: 'flex', flexDirection: 'column', padding: '14px 12px', gap: 12, transition: 'width .16s', overflow: 'hidden',
     }}>
       {collapsed
         ? <WIconButton name="search" title="Buscar" dim={40} style={{ margin: '0 auto' }} />
-        : <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 10px', borderRadius: WT.pill, border: `1px solid ${WT.border}`, background: WT.inset }}>
-            <WIcon name="search" size={16} />
-            <input placeholder="Buscar paciente, agendamento…" style={{ border: 'none', outline: 'none', background: 'transparent', font: `${WT.wBody} 14px ${WT.font}`, color: WT.fg, flex: 1, minWidth: 0 }} />
+        : <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff' }}>
+            <WIcon name="search" size={15} />
+            <input placeholder="Buscar paciente, agendamento…" style={{ border: 'none', outline: 'none', background: 'transparent', font: `${WT.wBody} 13.5px ${WT.font}`, color: WT.fg, flex: 1, minWidth: 0 }} />
           </div>}
       <CreateButton collapsed={collapsed} onCreate={onCreate} />
       {!collapsed && (
-        <>
+        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ borderTop: `1px solid ${WT.borderSub}` }} />
           <MiniCalendar value={date} onSelect={onSelectDate} />
           {/* Status do agendamento — seção colapsável (inicia fechada) */}
@@ -359,9 +359,9 @@ function Sidebar({ collapsed, onToggle, date, onSelectDate, onCreate, agendaSel 
               <AgendaSidebarPanel selected={agendaSel.selected} onAdd={agendaSel.add} onRemove={agendaSel.remove} date={agendaSel.date} />
             </>
           )}
-        </>
+        </div>
       )}
-      <div style={{ flex: 1 }} />
+      {collapsed && <div style={{ flex: 1 }} />}
       <SideNav icon={collapsed ? 'chevrons-right' : 'chevrons-left'} label="Recolher" collapsed={collapsed} onClick={onToggle} />
     </aside>
   );
@@ -380,18 +380,26 @@ function MiniCalendar({ value, onSelect, compact }) {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   const cell = compact ? 30 : 32;
   return (
-    <div style={{ width: cell * 7 + 8, padding: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-        <div style={{ flex: 1, fontSize: 14, fontWeight: WT.wHead, color: WT.fg, textTransform: 'capitalize', paddingLeft: 4 }}>{MONTHS[m]} {y}</div>
-        <WIconButton name="chevron-left" dim={28} onClick={() => setView(new Date(y, m - 1, 1))} />
-        <WIconButton name="chevron-right" dim={28} onClick={() => setView(new Date(y, m + 1, 1))} />
+    <div style={{ width: '100%', maxWidth: cell * 7 + 8, padding: 8, boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <select value={m} onChange={e => setView(new Date(y, Number(e.target.value), 1))} title="Mês"
+          style={{ height: 26, borderRadius: WT.rS, border: '1px solid transparent', background: 'transparent', color: WT.fg, font: `${WT.wHead} 14px ${WT.font}`, padding: '0 0 0 2px', cursor: 'pointer', textTransform: 'capitalize' }}>
+          {MONTHS_SHORT.map((mo, i) => <option key={i} value={i}>{mo}</option>)}
+        </select>
+        <select value={y} onChange={e => setView(new Date(Number(e.target.value), m, 1))} title="Ano"
+          style={{ height: 26, borderRadius: WT.rS, border: '1px solid transparent', background: 'transparent', color: WT.fg, font: `${WT.wHead} 14px ${WT.font}`, padding: '0 0 0 2px', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+          {Array.from({ length: 11 }, (_, i) => y - 5 + i).map(yy => <option key={yy} value={yy}>{yy}</option>)}
+        </select>
+        <span style={{ flex: 1 }} />
+        <WIconButton name="chevron-left" dim={26} onClick={() => setView(new Date(y, m - 1, 1))} />
+        <WIconButton name="chevron-right" dim={26} onClick={() => setView(new Date(y, m + 1, 1))} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${cell}px)` }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 2 }}>
         {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((d, i) => (
-          <div key={i} style={{ height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: WT.wEmph, color: WT.muted }}>{d}</div>
+          <div key={i} style={{ minWidth: 0, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: WT.wEmph, color: WT.muted }}>{d}</div>
         ))}
         {cells.map((d, i) => {
-          if (d == null) return <div key={i} style={{ height: cell }} />;
+          if (d == null) return <div key={i} style={{ minWidth: 0, height: cell }} />;
           const iso = `${y}-${pad2(m + 1)}-${pad2(d)}`;
           const isToday = iso === TODAY;
           const isSel = iso === value;
@@ -406,8 +414,8 @@ function CalCell({ cell, day, isToday, isSel, onClick, disabled, title }) {
   const [hover, setHover] = React.useState(false);
   return (
     <button onClick={disabled ? undefined : onClick} title={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
-      height: cell, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', borderRadius: '50%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 1,
+      height: cell, minWidth: 0, padding: 0, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', borderRadius: '50%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: WT.font, fontSize: 13, fontVariantNumeric: 'tabular-nums',
       fontWeight: isSel || isToday ? WT.wEmph : WT.wBody,
       background: isSel ? WT.calSelBg : (hover && !disabled ? WT.calHi : 'transparent'),
