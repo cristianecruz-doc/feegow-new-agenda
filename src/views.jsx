@@ -321,33 +321,56 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
 }
 
 // ---- Shared column grid -----------------------------------------------------
-function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, cardStyle, freeOnly, dateForToday, showPro,
+function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, cardStyle, freeOnly, dateForToday, showPro,
   onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft, drag, colMinWidth = 200, headerRender }) {
   const gutterW = 56;
-  const hours = []; for (let h = startMin; h <= endMin; h += 60) hours.push(h);
+  const colW = Math.round(colMinWidth * Math.max(0.7, Math.min(1.2, zoom)));
+  const scroller = React.useRef(null);
+  const [expanded, setExpanded] = React.useState(false);
+  // recorte automático: o dia começa no primeiro horário com conteúdo (grade/agendamento),
+  // eliminando o espaço vazio no topo
+  const firstContent = React.useMemo(() => {
+    let m = null; const c1 = v => { if (v != null && (m == null || v < m)) m = v; };
+    columns.forEach(c => { (c.appts || []).forEach(a => { if (a.status !== 'cancelado' && a.start) c1(toMin(a.start)); }); (c.grades || []).forEach(g => c1(toMin(g.start))); (c.blocks || []).forEach(b => c1(toMin(b.start))); });
+    return m;
+  }, [columns]);
+  const trimFull = firstContent == null ? startMin
+    : Math.max(startMin, Math.min(Math.floor(firstContent / 60) * 60, endMin - 120));
+  const trimStart = expanded ? startMin : trimFull;
+  const scrollKey = columns.map(c => c.id + (c.date || '')).join('|');
+  React.useEffect(() => { setExpanded(false); if (scroller.current) scroller.current.scrollTop = 0; }, [scrollKey]);
+  const hours = []; for (let h = trimStart; h <= endMin; h += 60) hours.push(h);
   return (
-    <div style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
-      <div style={{ minWidth: gutterW + columns.length * colMinWidth, display: 'flex', flexDirection: 'column' }}>
+    <div ref={scroller} style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
+      <div style={{ minWidth: gutterW + columns.length * colW, display: 'flex', flexDirection: 'column' }}>
         {/* sticky header */}
         <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', background: WT.raised, borderBottom: `1px solid ${WT.border}` }}>
-          <div style={{ width: gutterW, flex: 'none' }} />
+          <div style={{ width: gutterW, flex: 'none', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
+            {(expanded || firstContent != null) && trimFull > startMin && (
+              <button onClick={() => setExpanded(v => !v)} title={expanded ? `Ocultar horários vazios (${fmtMin(startMin)}–${fmtMin(trimFull)})` : `Mostrar horários anteriores (${fmtMin(startMin)}–${fmtMin(trimFull)})`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 3, height: 20, padding: '0 6px', borderRadius: WT.pill, border: `1px solid ${WT.border}`, background: '#fff', color: WT.muted, fontFamily: WT.font, fontSize: 10.5, cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
+                onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                <WIcon name={expanded ? 'chevron-down' : 'chevron-up'} size={11} color={WT.muted} />{expanded ? fmtMin(trimFull) : fmtMin(startMin)}
+              </button>
+            )}
+          </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colMinWidth, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
+            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
               {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} subParts={c.subParts} occupancy={c.occupancy} />}
             </div>
           ))}
         </div>
-        {/* body */}
-        <div style={{ display: 'flex' }}>
+        {/* body — 24px reservados no topo para as abas de nome de grade (ancoradas acima do 1º slot) */}
+        <div style={{ display: 'flex', paddingTop: 24 }}>
           {/* time gutter */}
-          <div style={{ width: gutterW, flex: 'none', position: 'relative', height: (endMin - startMin) * pxPerMin }}>
+          <div style={{ width: gutterW, flex: 'none', position: 'relative', height: (endMin - trimStart) * pxPerMin }}>
             {hours.map(h => (
-              <div key={h} style={{ position: 'absolute', top: (h - startMin) * pxPerMin - 7, right: 8, fontSize: 11, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>{fmtMin(h)}</div>
+              <div key={h} style={{ position: 'absolute', top: (h - trimStart) * pxPerMin - 7, right: 8, fontSize: 11, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>{fmtMin(h)}</div>
             ))}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colMinWidth, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
-              <ColumnTrack colId={c.id} appts={c.appts} blocks={c.blocks} startMin={startMin} endMin={endMin}
+            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
+              <ColumnTrack colId={c.id} appts={c.appts} blocks={c.blocks} startMin={trimStart} endMin={endMin}
                 slotMin={slotMin} pxPerMin={pxPerMin} cardStyle={cardStyle} freeOnly={freeOnly} bookable={c.bookable !== false} showPro={c.showPro != null ? c.showPro : showPro} grades={c.grades} coverage={c.coverage}
                 onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} isToday={c.date === dateForToday} />
             </div>
@@ -372,11 +395,19 @@ function EmptyState({ icon, title, hint }) {
 // ============================================================================
 //  VIEW WRAPPERS
 // ============================================================================
+// densidade automática: adapta a altura da hora à altura útil da janela
+// (telas 1366×768 / Windows a 125% caem em "compact")
+function autoDensity() {
+  const h = (typeof window !== 'undefined' && window.innerHeight) || 900;
+  return h < 660 ? 'compact' : h < 860 ? 'normal' : 'comfortable';
+}
 function getGridConf(state) {
   const startMin = toMin(state.timeStart || '07:00');
   const endMin = toMin(state.timeEnd || '20:00');
-  const pxPerMin = { compact: 2.1, normal: 2.6, comfortable: 3.15 }[state.density || 'normal'];
-  return { startMin, endMin, slotMin: 5, pxPerMin };
+  const d = (!state.density || state.density === 'auto') ? autoDensity() : state.density;
+  const zoom = state.zoom || 1;
+  const pxPerMin = { compact: 2.1, normal: 2.6, comfortable: 3.15 }[d] * zoom;
+  return { startMin, endMin, slotMin: 5, pxPerMin, zoom };
 }
 
 // is a column bookable under the current especialidade / sala filter?

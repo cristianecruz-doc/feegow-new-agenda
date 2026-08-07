@@ -57,12 +57,12 @@ function App() {
   const [blocks, setBlocks] = React.useState(() => SEED_BLOCKS.map(b => ({ ...b })));
   const [app, setApp] = React.useState({
     view: 'dia', date: TODAY, dayPro: 'p1', extraResources: [],
-    filters: { pros: null, spec: [], conv: [], unit: [], room: [], proc: [] }, freeOnly: false,
+    filters: { pros: ['p1'], spec: [], conv: [], unit: [], room: [], proc: [] }, freeOnly: false,
     sidebarCollapsed: false,
     // Seletor de agendas fixo na barra lateral (abaixo do status)
     agendasPlacement: 'sidebar',
     // Configurações de visualização do usuário
-    cardStyle: 'filled', density: 'comfortable',
+    cardStyle: 'filled', density: 'compact', zoom: 1,
     // Sinalizadores exibidos nos cards
     showPriorityFlags: false, showNewPatientFlag: false,
     // Página ativa do módulo ('agenda' | 'agenda-options')

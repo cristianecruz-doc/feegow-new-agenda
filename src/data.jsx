@@ -62,7 +62,7 @@ const GRADES = [
   // Dra. Renata — manhã de consultas no Pardal, tarde de procedimentos no Bem-te-vi
   // (exemplo: mesmo profissional, dois turnos em salas diferentes)
   { pro: 'p1', days: [1, 2, 3, 4, 5], start: '08:00', end: '12:00', slotMin: 30, color: GREEN,      label: 'Consultas',     procs: ['derm', 'retorno', 'tele'], convenios: ['Particular', 'Unimed'], room: 'Consultório 1 · Pardal', doctoralia: true },
-  { pro: 'p1', days: [1, 2, 3, 4, 5], start: '13:00', end: '18:00', slotMin: 45, color: '#7b3fb0',  label: 'Procedimentos', procs: ['mapa', 'infil', 'usg'], convenios: ['Particular', 'Unimed'], room: 'Consultório 2 · Bem-te-vi' },
+  { pro: 'p1', days: [1, 2, 3, 4, 5], start: '13:00', end: '18:00', slotMin: 60, color: '#7b3fb0',  label: 'Procedimentos', procs: ['mapa', 'infil', 'usg'], convenios: ['Particular', 'Unimed'], room: 'Consultório 2 · Bem-te-vi' },
   { pro: 'p1', days: [6],             start: '08:00', end: '12:00', slotMin: 30, color: GREEN,      label: 'Consultas',     procs: ['derm', 'retorno'], convenios: ['Particular', 'Unimed'], room: 'Consultório 1 · Pardal', doctoralia: true },
   // Dr. Bruno — dois turnos verdes
   { pro: 'p2', days: [1, 2, 3, 4, 5], start: '08:00', end: '13:30', slotMin: 60, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno'], convenios: ['Particular', 'SulAmérica'], intervals: [{ start: '12:00', end: '12:30', label: 'Almoço' }] },

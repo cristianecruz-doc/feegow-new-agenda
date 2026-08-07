@@ -63,6 +63,24 @@ function CheckList({ title, options, selected, onToggle, onClear }) {
   );
 }
 
+// zoom da grade — refina a densidade em telas pequenas (1366×768, Windows 125%)
+function ZoomStepper({ value, onChange }) {
+  const clamp = z => Math.round(Math.max(0.6, Math.min(1.6, z)) * 100) / 100;
+  const btn = { width: 26, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', cursor: 'pointer', color: WT.fg2 };
+  React.useEffect(() => {
+    const h = e => { if (!(e.ctrlKey || e.metaKey)) return; if (e.key === '-') { e.preventDefault(); onChange(clamp(value - 0.1)); } else if (e.key === '=' || e.key === '+') { e.preventDefault(); onChange(clamp(value + 0.1)); } else if (e.key === '0') { e.preventDefault(); onChange(1); } };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, [value, onChange]);
+  return (
+    <div title="Zoom da grade (Ctrl + / Ctrl − / Ctrl 0)" style={{ display: 'inline-flex', alignItems: 'center', height: 32, border: `1px solid ${WT.border}`, borderRadius: WT.rM, background: '#fff', overflow: 'hidden' }}>
+      <button aria-label="Diminuir zoom" onClick={() => onChange(clamp(value - 0.1))} style={btn} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><WIcon name="minus" size={14} /></button>
+      <button onClick={() => onChange(1)} style={{ ...btn, width: 44, fontFamily: WT.font, fontSize: 12, fontWeight: WT.wEmph, color: value === 1 ? WT.muted : WT.accent, fontVariantNumeric: 'tabular-nums' }}
+        onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>{Math.round(value * 100)}%</button>
+      <button aria-label="Aumentar zoom" onClick={() => onChange(clamp(value + 0.1))} style={btn} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><WIcon name="plus" size={14} /></button>
+    </div>
+  );
+}
+
 function Toolbar({ state, set, onNew, compact }) {
   const { view, date, filters, freeOnly, weekMode } = state;
   const mvp = !!window.__mvp;
@@ -108,7 +126,8 @@ function Toolbar({ state, set, onNew, compact }) {
   const clearFilter = key => set(s => ({ filters: { ...s.filters, [key]: key === 'pros' ? null : [] } }));
   const clearAll = () => set({ filters: { pros: null, spec: [], conv: [], unit: [], room: [], proc: [] }, freeOnly: false });
   const arr = k => filters[k] || [];
-  const activeCount = arr('pros').length + arr('spec').length + arr('conv').length + arr('unit').length + arr('room').length + arr('proc').length + (freeOnly ? 1 : 0);
+  // seleção de agendas vive na barra lateral — não conta como filtro ativo
+  const activeCount = (state.agendasPlacement === 'sidebar' ? 0 : arr('pros').length) + arr('spec').length + arr('conv').length + arr('unit').length + arr('room').length + arr('proc').length + (freeOnly ? 1 : 0);
   // procedimentos ordenados por uso (clínicas reais têm +15k → mostra só top 10 até o usuário buscar)
   const PROC_USAGE = React.useMemo(() => { const c = {}; (window.ALL_APPTS || []).forEach(a => ((a.procs && a.procs.length) ? a.procs : (a.proc ? [a.proc] : [])).forEach(id => { c[id] = (c[id] || 0) + 1; })); return c; }, []);
   const procsByUse = React.useMemo(() => PROC_LIST.slice().sort((a, b) => (PROC_USAGE[b.id] || 0) - (PROC_USAGE[a.id] || 0)), [PROC_USAGE]);
@@ -161,6 +180,8 @@ function Toolbar({ state, set, onNew, compact }) {
         {activeCount > 0 && <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: WT.pill, background: WT.accentFill, color: '#fff', fontSize: 11, fontWeight: WT.wHead, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{activeCount}</span>}
       </button>
 
+      {view !== 'mes' && <ZoomStepper value={state.zoom || 1} onChange={z => set({ zoom: z })} />}
+
       <WIconButton name="sliders-horizontal" title="Configurações de visualização" active={pop && pop.kind === 'viewcfg'} onClick={e => open('viewcfg', e.currentTarget.getBoundingClientRect())} />
 
       {pop && pop.kind === 'cal' && (
@@ -207,6 +228,12 @@ function Toolbar({ state, set, onNew, compact }) {
               <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Indicação de cor do profissional</span>
               <WSegmented value={state.cardStyle} onChange={v => set({ cardStyle: v })}
                 options={[{ value: 'typebar', label: 'Barra' }, { value: 'filled', label: 'Preenchido' }]} />
+            </div>
+            <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Altura da hora</span>
+              <WSegmented value={state.density || 'auto'} onChange={v => set({ density: v })}
+                options={[{ value: 'auto', label: 'Auto' }, { value: 'compact', label: 'Compacta' }, { value: 'normal', label: 'Média' }, { value: 'comfortable', label: 'Alta' }]} />
+              <span style={{ fontSize: 11, color: WT.muted }}>Auto ajusta a densidade à altura da tela. O zoom da barra superior refina em cima disso.</span>
             </div>
             <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Sinalizadores no card</span>
