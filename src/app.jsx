@@ -47,7 +47,7 @@ function App() {
     setApp(s => {
       const patch = {};
       if (['mes', 'equip', 'sala', 'programacao'].includes(s.view)) patch.view = 'dia';
-      if ((s.filters.conv || []).length || (s.filters.room || []).length) patch.filters = { ...s.filters, conv: [], room: [] };
+      if ((s.filters.conv || []).length) patch.filters = { ...s.filters, conv: [] };
       return Object.keys(patch).length ? { ...s, ...patch } : s;
     });
   }, [mvp]);
@@ -56,8 +56,9 @@ function App() {
   const [appts, setAppts] = React.useState(() => ALL_APPTS.map(a => ({ ...a })));
   const [blocks, setBlocks] = React.useState(() => SEED_BLOCKS.map(b => ({ ...b })));
   const [app, setApp] = React.useState({
-    view: 'dia', date: TODAY, dayPro: 'p1', extraResources: [],
-    filters: { pros: ['p1'], spec: [], conv: [], unit: [], room: [], proc: [] }, freeOnly: false,
+    view: 'dia', date: TODAY, dayPro: 'p1',
+    // filtros de restrição + seleção de agendas (ver agendaSelection em views.jsx)
+    filters: emptyFilters(), sel: { pros: null, off: [], extra: [] }, freeOnly: false,
     sidebarCollapsed: false,
     // Seletor de agendas fixo na barra lateral (abaixo do status)
     agendasPlacement: 'sidebar',
@@ -103,7 +104,7 @@ function App() {
     const st = STATUS[status] || {};
     flash(`Status: ${st.label || status}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? { ...x, status: prev } : x)); setToast(null); } } });
   };
-  const filtered = filterAppts(appts, app.filters).filter(a => !cfgHiddenStatuses().includes(a.status));
+  const filtered = filterAppts(appts).filter(a => !cfgHiddenStatuses().includes(a.status));
 
   // ---- slot resolution -----------------------------------------------------
   function resolveSlot(colId) {

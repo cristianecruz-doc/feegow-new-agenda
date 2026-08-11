@@ -310,13 +310,8 @@ function CreateButton({ collapsed, onCreate }) {
   );
 }
 
-const LEGEND = [
-  ['marcado', 'Marcado'], ['confirmado', 'Confirmado'], ['aguardando', 'Aguardando'], ['em_atendimento', 'Em atendimento'], ['finalizado', 'Finalizado'], ['faltou', 'Faltou'], ['remarcado', 'Remarcado'], ['cancelado', 'Cancelado'],
-];
-
 function Sidebar({ collapsed, onToggle, date, onSelectDate, onCreate, agendaSel }) {
   const w = collapsed ? 64 : 248;
-  const [statusOpen, setStatusOpen] = React.useState(false); // legenda de status sempre inicia fechada
   return (
     <aside style={{
       width: w, flex: 'none', background: WT.bg, borderRight: `1px solid ${WT.border}`,
@@ -333,30 +328,10 @@ function Sidebar({ collapsed, onToggle, date, onSelectDate, onCreate, agendaSel 
         <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ borderTop: `1px solid ${WT.borderSub}` }} />
           <MiniCalendar value={date} onSelect={onSelectDate} />
-          {/* Status do agendamento — seção colapsável (inicia fechada) */}
-          <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12 }}>
-            <button onClick={() => setStatusOpen(o => !o)} style={{
-              display: 'flex', alignItems: 'center', gap: 6, width: '100%', border: 'none', background: 'transparent',
-              cursor: 'pointer', padding: '2px 4px', borderRadius: WT.rM, fontFamily: WT.font,
-            }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <span style={{ flex: 1, textAlign: 'left', fontSize: 11, fontWeight: WT.wEmph, color: WT.fg2, textTransform: 'uppercase', letterSpacing: '.05em' }}>Status do agendamento</span>
-              <WIcon name={statusOpen ? 'chevron-up' : 'chevron-down'} size={15} color={WT.muted} />
-            </button>
-            {statusOpen && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8 }}>
-                {LEGEND.map(([k, label]) => (
-                  <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px', fontSize: 13, color: WT.fg2 }}>
-                    <WIcon name={STATUS[k].icon} size={15} color={STATUS[k].fg} strokeWidth={2.2} style={{ flex: 'none' }} />{label}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* Agendas — abaixo do status */}
           {agendaSel && window.AgendaSidebarPanel && (
             <>
               <div style={{ borderTop: `1px solid ${WT.borderSub}` }} />
-              <AgendaSidebarPanel selected={agendaSel.selected} onAdd={agendaSel.add} onRemove={agendaSel.remove} date={agendaSel.date} />
+              <AgendaSidebarPanel sel={agendaSel} />
             </>
           )}
         </div>
