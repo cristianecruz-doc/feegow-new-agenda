@@ -261,52 +261,18 @@ function SideNav({ icon, label, active, disabled, badge, collapsed, onClick }) {
   );
 }
 
-// ---- "Criar" dropdown (Google-style) ----------------------------------------
-const CREATE_ITEMS = [
-  { id: 'agendamento', icon: 'calendar-plus', label: 'Agendamento', desc: 'Consulta, exame ou retorno' },
-  { id: 'encaixe',     icon: 'git-merge',     label: 'Encaixe',      desc: 'Sobrepõe um horário ocupado' },
-  { id: 'bloqueio',    icon: 'ban',           label: 'Bloqueio',     desc: 'Almoço, reunião, ausência' },
-];
+// ---- "Criar" (abre o painel lateral de criação) ------------------------------
 function CreateButton({ collapsed, onCreate }) {
-  const [open, setOpen] = React.useState(false);
-  const ref = React.useRef(null);
-  React.useEffect(() => {
-    if (!open) return;
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
-  }, [open]);
   return (
-    <div ref={ref} style={{ position: 'relative', flex: 'none' }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 38, cursor: 'pointer',
-        padding: collapsed ? 0 : '0 12px', justifyContent: 'center',
-        borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff', boxShadow: WT.shEmphasis,
-        fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, color: WT.fg,
-      }}>
-        <WIcon name="plus" size={17} color={WT.accent} />
-        {!collapsed && <span>Criar</span>}
-        {!collapsed && <WIcon name="chevron-down" size={14} />}
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: 44, left: 0, width: collapsed ? 248 : '100%', minWidth: 248, zIndex: 60,
-          background: '#fff', border: `1px solid ${WT.border}`, borderRadius: WT.rL, boxShadow: WT.shPopout, overflow: 'hidden', padding: 6,
-        }}>
-          {CREATE_ITEMS.map(it => (
-            <button key={it.id} onClick={() => { setOpen(false); onCreate(it.id); }} style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '9px 10px', borderRadius: WT.rM,
-              border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font,
-            }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <span style={{ width: 32, height: 32, borderRadius: WT.rM, background: WT.accentSoft, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><WIcon name={it.icon} size={16} color={WT.accent} /></span>
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 14, fontWeight: WT.wEmph, color: WT.fg }}>{it.label}</span>
-                <span style={{ display: 'block', fontSize: 12, color: WT.muted }}>{it.desc}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <button onClick={() => onCreate()} style={{
+      display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 38, cursor: 'pointer',
+      padding: collapsed ? 0 : '0 12px', justifyContent: 'center', flex: 'none',
+      borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff', boxShadow: WT.shEmphasis,
+      fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, color: WT.fg,
+    }}>
+      <WIcon name="plus" size={17} color={WT.accent} />
+      {!collapsed && <span>Criar</span>}
+    </button>
   );
 }
 

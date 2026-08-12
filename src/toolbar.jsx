@@ -42,25 +42,29 @@ function Toolbar({ state, set, onNew, compact }) {
   const dateLabel = view === 'semana'
     ? `${fmtShortDate(state.date)} – ${fmtShortDate(dateUtil.addDays(dateUtil.weekDaysOf(date)[5], 0))}`
     : view === 'mes' ? `${MONTHS[parseISO(date).getMonth()]} ${parseISO(date).getFullYear()}`
-    : fmtLongDate(date);
+    : compact ? fmtShortDate(date) : fmtLongDate(date);
+
+  // "Hoje" só aparece quando hoje NÃO está no período visível — estando nele o
+  // botão não teria para onde levar
+  const showToday = view === 'semana' ? !dateUtil.weekDaysOf(date, 7).includes(TODAY)
+    : view === 'mes' ? (parseISO(date).getMonth() !== parseISO(TODAY).getMonth() || parseISO(date).getFullYear() !== parseISO(TODAY).getFullYear())
+    : date !== TODAY;
 
 
   return (
     <div style={{ flex: 'none', background: WT.raised, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-      {/* left: date navigation */}
-      <WButton variant="default" label="Hoje" onClick={() => set({ date: TODAY })} />
+      {/* esquerda: setas · data (abre o calendário) · Hoje (só fora de hoje) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <WIconButton name="chevron-left" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? -7 : view === 'mes' ? -30 : -1) }))} />
-        <WIconButton name="chevron-right" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? 7 : view === 'mes' ? 30 : 1) }))} />
+        <WIconButton name="chevron-left" title="Anterior" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? -7 : view === 'mes' ? -30 : -1) }))} />
+        <WIconButton name="chevron-right" title="Próximo" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? 7 : view === 'mes' ? 30 : 1) }))} />
       </div>
-      <button onClick={e => open('cal', e.currentTarget.getBoundingClientRect())} style={{
-        display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: WT.rM,
-        border: `1px solid transparent`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 15, color: WT.fg, fontWeight: WT.wHead, textTransform: 'capitalize',
+      <button onClick={e => open('cal', e.currentTarget.getBoundingClientRect())} title="Escolher data" style={{
+        display: 'flex', alignItems: 'center', height: 32, padding: '0 8px', borderRadius: WT.rM,
+        border: `1px solid transparent`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 15, color: WT.fg, fontWeight: WT.wHead, textTransform: 'capitalize', whiteSpace: 'nowrap',
       }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-        <WIcon name="calendar-days" size={17} color={WT.accent} />
-        {!compact && dateLabel}
-        <WIcon name="chevron-down" size={14} />
+        {dateLabel}
       </button>
+      {showToday && <WButton variant="default" label="Hoje" onClick={() => set({ date: TODAY })} />}
 
       <div style={{ flex: 1 }} />
 
