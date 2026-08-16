@@ -54,27 +54,49 @@ function rangeGaps(ranges, startMin, endMin) {
   return gaps;
 }
 
-// filter appts by global filters (conv / spec / unidade / sala) + drop deleted
-function filterAppts(appts, filters) {
-  const specs = filters.spec || [], units = filters.unit || [], rooms = filters.room || [];
-  return appts.filter(a => {
-    if (a.deleted) return false;
-    // convênio filtra AGENDAS (colunas dos médicos que atendem), não agendamentos —
-    // mostra todos os agendamentos existentes nas agendas dos médicos elegíveis
-    if (specs.length) { const pro = PROS.find(p => p.id === a.pro); if (!pro || !specs.some(s => proHasSpec(pro, s))) return false; }
-    if (units.length) { const pro = PROS.find(p => p.id === a.pro); if (!pro || !units.includes(pro.unit)) return false; }
-    if (rooms.length) { const pro = PROS.find(p => p.id === a.pro); if (!pro || !rooms.includes(pro.room)) return false; }
-    return true;
+// ---- Filtros de agenda ------------------------------------------------------
+// Quatro categorias de restrição ("este recurso atende X?"), usadas pelo seletor
+// de agendas da barra lateral. OR dentro da categoria, AND entre categorias.
+// Cada categoria só vale para os tipos de recurso que têm o atributo: onde não se
+// aplica ela é OMITIDA, nunca zera a seção. Equipamento não casa com nenhuma —
+// seu "spec" ("Sala de Ultrassom") é outro vocabulário, não especialidade médica.
+const AGENDA_FILTERS = [
+  { key: 'proc', label: 'Serviços', icon: 'stethoscope',
+    values: () => PROC_LIST.map(p => ({ value: p.id, label: p.name })),
+    match: { pro: (p, v, d) => !d || dayAcceptsCond(p.id, d, { procId: v }) } },
+  { key: 'spec', label: 'Especialidade', icon: 'user-round',
+    values: () => [...new Set(PROS.flatMap(p => specsOf(p)))].map(s => ({ value: s, label: s })),
+    match: { pro: (p, v) => proHasSpec(p, v), room: (r, v) => r.spec === v } },
+  { key: 'unit', label: 'Unidade', icon: 'building-2',
+    values: () => UNITS.map(u => ({ value: u, label: u })),
+    match: { pro: (p, v) => p.unit === v, room: (r, v) => r.unit === v } },
+  { key: 'conv', label: 'Convênio', icon: 'shield-check', mvpHidden: true,
+    values: () => CONVENIOS.map(c => ({ value: c, label: c })),
+    match: { pro: (p, v, d) => !d || dayAcceptsCond(p.id, d, { conv: v }) } },
+];
+const agendaFilterCats = () => AGENDA_FILTERS.filter(c => !(c.mvpHidden && window.__mvp));
+const emptyFilters = () => ({ proc: [], spec: [], unit: [], conv: [] });
+const hasAgendaFilters = f => AGENDA_FILTERS.some(c => (f[c.key] || []).length);
+// o recurso satisfaz todos os filtros ativos? categoria sem valor OU inaplicável passa
+function fitsFilters(kind, meta, filters, date) {
+  return AGENDA_FILTERS.every(cat => {
+    const vals = filters[cat.key] || [], m = cat.match[kind];
+    return !vals.length || !m || vals.some(v => m(meta, v, date));
   });
 }
+// busca sem acento/caixa: o usuário digita "saude", o dado é "Bradesco Saúde"
+const normq = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+// agendamentos visíveis: os filtros recortam AGENDAS (colunas), não agendamentos —
+// esconder consultas dentro de uma coluna que o usuário escolheu ver só confunde
+function filterAppts(appts) {
+  return appts.filter(a => !a.deleted);
+}
+// recorte de profissionais para Mês / Programação (views sem seletor de agendas):
+// só as categorias independentes de data — convênio/serviço variam por dia (grade)
 function visiblePros(filters) {
-  let pros = PROS;
-  const specs = filters.spec || [], units = filters.unit || [], rooms = filters.room || [];
-  if (specs.length) pros = pros.filter(p => specs.some(s => proHasSpec(p, s)));
-  if (units.length) pros = pros.filter(p => units.includes(p.unit));
-  if (rooms.length) pros = pros.filter(p => rooms.includes(p.room));
-  if (filters.pros && filters.pros.length) pros = pros.filter(p => filters.pros.includes(p.id));
-  return pros;
+  const specs = filters.spec || [], units = filters.unit || [];
+  return PROS.filter(p => (!specs.length || specs.some(s => proHasSpec(p, s))) && (!units.length || units.includes(p.unit)));
 }
 function occupancyOf(appts, startMin, endMin, blocks) {
   const blocked = (blocks || []).reduce((s, b) => s + (toMin(b.end) - toMin(b.start)), 0);
@@ -140,29 +162,17 @@ function groupOverlapBlocks(blocks) {
 }
 // cabeçalho da faixa de grade — aba sólida na cor da grade, ancorada acima do 1º slot
 function GradeBandHeader({ g, HEADER_H }) {
-  const ref = React.useRef(null);
-  const [wide, setWide] = React.useState(false);
-  React.useLayoutEffect(() => {
-    const el = ref.current; if (!el) return;
-    const check = () => setWide(el.clientWidth >= 260);
-    check();
-    let ro; if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(check); ro.observe(el); }
-    return () => ro && ro.disconnect();
-  }, []);
   const name = g.label ? `${g.label}${g.room ? ' · ' + roomShort(g.room) : ''}` : (g.room ? `${g.room} · Unidade Centro` : 'Unidade Centro');
+  const doctoTitle = g.doctoralia ? ' · disponível em Doctoralia' : '';
   return (
-    <div ref={ref} style={{ position: 'absolute', top: -HEADER_H, left: 0, right: 0, height: HEADER_H, display: 'flex', alignItems: 'flex-end', gap: 4, zIndex: 2, pointerEvents: 'none' }}>
-      <span title={`Grade: ${name} · ${g.start}–${g.end}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: g.doctoralia ? '72%' : '100%', height: HEADER_H, padding: '0 8px', background: g.color, borderRadius: `${WT.rS} ${WT.rS} 0 0`, pointerEvents: 'auto' }}>
-        <WIcon name="calendar-check" size={11} color="#fff" style={{ flex: 'none', opacity: 0.9 }} />
+    <div style={{ position: 'absolute', top: -HEADER_H, left: 0, right: 0, height: HEADER_H, display: 'flex', alignItems: 'flex-end', gap: 4, zIndex: 2, pointerEvents: 'none' }}>
+      <span title={`Grade: ${name} · ${g.start}–${g.end}${doctoTitle}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', height: HEADER_H, padding: '0 8px', background: g.color, borderRadius: `${WT.rS} ${WT.rS} 0 0`, pointerEvents: 'auto' }}>
         <span style={{ fontSize: 11.5, fontWeight: WT.wXbold, color: '#fff', letterSpacing: '.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+        {/* selo da Doctoralia no fim do próprio rótulo da grade — a faixa já diz
+            de qual disponibilidade se trata, não precisa repetir isso em texto */}
+        {/* só existe o PNG colorido — o filtro o achata em branco sobre a faixa */}
+        {g.doctoralia && <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" style={{ width: 14, height: 14, flex: 'none', display: 'block', filter: 'brightness(0) invert(1)' }} />}
       </span>
-      <span style={{ flex: 1 }} />
-      {g.doctoralia && (
-        <span title="Disponível em Doctoralia" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', height: HEADER_H, cursor: 'help', pointerEvents: 'auto', paddingRight: 4 }}>
-          {wide && <span style={{ fontSize: 11, fontWeight: WT.wXbold, color: '#00847e', whiteSpace: 'nowrap' }}>Disponível em Doctoralia</span>}
-          <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" style={{ width: 15, height: 15, display: 'block' }} />
-        </span>
-      )}
     </div>
   );
 }
@@ -179,6 +189,10 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
   const gf = window.__gradeFilter;
   const gradeAllowed = g => !gf || ((!gf.conv.length || gf.conv.some(c => gradeAccepts(g, { conv: c }))) && (!gf.proc.length || gf.proc.some(id => gradeAccepts(g, { procId: id }))));
   const activeGrades = gradeBlocks.filter(gradeAllowed);
+  // faixas apagadas PELO FILTRO: precisam se explicar onde o usuário está olhando,
+  // senão viram "sem grade" e o buraco na agenda fica inexplicável
+  const hiddenByFilter = gf ? gradeBlocks.filter(g => !gradeAllowed(g)) : [];
+  const filterWhy = gf ? [...gf.conv, ...gf.proc.map(id => (PROCS[id] || {}).name || id)].join(' / ') : '';
   // coverage = ranges where booking is allowed. From this column's grades, or an explicit
   // merged coverage (Week multi-resource). Empty array given explicitly = book anywhere.
   const coverRanges = coverage != null ? coverage : activeGrades.map(g => [toMin(g.start), toMin(g.end)]);
@@ -220,6 +234,16 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
       {hasCoverage && rangeGaps(coverRanges, startMin, endMin).map(([s, e], i) => (
         <div key={'ng' + i} title="Sem grade — fora da disponibilidade do profissional" style={{ position: 'absolute', left: 0, right: 0, top: (s - startMin) * pxPerMin, height: (e - s) * pxPerMin, background: '#eef0f0', zIndex: 0 }} />
       ))}
+      {/* faixas apagadas pelo filtro — dizem POR QUE estão apagadas */}
+      {hiddenByFilter.map((g, i) => {
+        const gh = (toMin(g.end) - toMin(g.start)) * pxPerMin;
+        return (
+          <div key={'fo' + i} title={`Não atende ${filterWhy} nesta faixa${g.label ? ' (' + g.label + ')' : ''} · ${g.start}–${g.end}`}
+            style={{ position: 'absolute', left: 0, right: 0, top: (toMin(g.start) - startMin) * pxPerMin, height: gh, background: '#eef0f0', zIndex: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 6, overflow: 'hidden' }}>
+            {gh >= 36 && <span style={{ fontSize: 11, color: WT.muted, textAlign: 'center', padding: '0 6px' }}>Não atende {filterWhy}</span>}
+          </div>
+        );
+      })}
       {/* faixas com grade — fundo branco + tint da cor da grade e barra lateral */}
       {activeGrades.map((g, i) => {
         const gh = (toMin(g.end) - toMin(g.start)) * pxPerMin;
@@ -271,13 +295,41 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
         </div>
       )}
 
-      {/* draft placeholder — agendamento em criação (estilo Google) */}
+      {/* draft placeholder — pré-visualização ao vivo do formulário, com cara de card/bloqueio */}
       {draft && draft.colId === colId && (() => {
-        const dm = toMin(draft.time); const dh = (draft.dur || slotMin) * pxPerMin;
+        const dm = toMin(draft.time); const dur = draft.dur || slotMin;
+        const top = (dm - startMin) * pxPerMin;
+        const dh = Math.max(dur * pxPerMin - 2, 18);
+        const shadow = '0 12px 32px #25282845, 0 3px 10px #25282826';
+        if (draft.kind === 'bloqueio') {
+          const tall = dh > 34;
+          return (
+            <div style={{ position: 'absolute', left: 2, right: 2, top, height: dh, zIndex: 8, borderRadius: WT.rS, border: `1px solid ${WT.border}`, background: 'repeating-linear-gradient(135deg,#fafbfb,#fafbfb 7px,#f0f2f2 7px,#f0f2f2 14px)', boxShadow: shadow, display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: tall ? 1 : 6, padding: tall ? '4px 8px' : '0 8px', overflow: 'hidden', pointerEvents: 'none' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>
+                <WIcon name="lock" size={11} color={WT.fg2} style={{ flex: 'none' }} />
+                <span style={{ fontSize: 11.5, fontWeight: WT.wEmph, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{draft.titulo || 'Bloqueio'}</span>
+              </span>
+              <span style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{draft.allDay ? 'Dia inteiro' : `${draft.time}–${fmtMin(dm + dur)}`}</span>
+            </div>
+          );
+        }
+        // aparência de card de agendamento (paleta do 1º procedimento, sombra grande)
+        const procId = draft.procIds && draft.procIds[0];
+        const t = procId ? apptColors({ proc: procId, procs: draft.procIds }) : null;
+        const svc = t ? t.bar : WT.accentFill;
+        const strong = t ? t.fg : WT.accent;
+        const soft = t ? `color-mix(in srgb, ${t.fg} 90%, #fff)` : WT.accent;
+        const tiny = dh < 34;
+        const procName = procId ? `${(PROCS[procId] || {}).name}${draft.procIds.length > 1 ? ` +${draft.procIds.length - 1}` : ''}` : null;
         return (
-          <div style={{ position: 'absolute', left: 2, right: 2, top: (dm - startMin) * pxPerMin, height: Math.max(dh - 2, 18), zIndex: 8, borderRadius: WT.rM, background: WT.accentSoft, border: `1.5px dashed ${WT.borderAccent}`, boxShadow: '0 1px 4px #006a5926', display: 'flex', flexDirection: dh > 34 ? 'column' : 'row', alignItems: dh > 34 ? 'flex-start' : 'center', gap: dh > 34 ? 1 : 6, padding: dh > 34 ? '5px 9px' : '0 9px', overflow: 'hidden', pointerEvents: 'none' }}>
-            <span style={{ fontSize: 12, fontWeight: WT.wHead, color: WT.accent, whiteSpace: 'nowrap' }}>Novo agendamento</span>
-            <span style={{ fontSize: 11, color: WT.accent, opacity: 0.85, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{draft.time}–{fmtMin(dm + (draft.dur || slotMin))} · {draft.dur || slotMin} min</span>
+          <div style={{ position: 'absolute', top, height: dh, zIndex: 8, left: `calc((100% - ${GUTTER}px) * 0 + 7px)`, width: `calc((100% - ${GUTTER}px) * 1 - 9px)`, borderRadius: WT.rM, background: `color-mix(in srgb, ${svc} 20%, #fff)`, border: `1px solid color-mix(in srgb, ${svc} 42%, #fff)`, outline: draft.kind === 'encaixe' ? `1.5px dashed ${WT.warning}` : 'none', outlineOffset: -2, boxShadow: shadow, display: 'flex', flexDirection: tiny ? 'row' : 'column', alignItems: tiny ? 'center' : 'stretch', gap: tiny ? 5 : 3, padding: tiny ? '0 9px' : '5px 9px', overflow: 'hidden', pointerEvents: 'none', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+              <span style={{ fontSize: tiny ? 11 : 12.5, fontWeight: WT.wHead, color: strong, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{draft.patientName || (draft.kind === 'encaixe' ? 'Novo encaixe' : 'Novo agendamento')}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ fontSize: 11, color: soft, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{draft.time} – {fmtMin(dm + dur)}</span>
+              {procName && !tiny && <span style={{ fontSize: 11, color: soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{procName}</span>}
+            </div>
           </div>
         );
       })()}
@@ -325,6 +377,9 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft, drag, colMinWidth = 200, headerRender }) {
   const gutterW = 56;
   const colW = Math.round(colMinWidth * Math.max(0.7, Math.min(1.2, zoom)));
+  // largura tem dois pontos: conforto (colW, alvo com espaço de sobra) e piso (80% dele) —
+  // as colunas comprimem até o piso antes de acionar o scroll horizontal
+  const colFloorW = Math.round(colW * 0.8);
   const scroller = React.useRef(null);
   const [expanded, setExpanded] = React.useState(false);
   // recorte automático: o dia começa no primeiro horário com conteúdo (grade/agendamento),
@@ -339,13 +394,27 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   const trimStart = expanded ? startMin : trimFull;
   const scrollKey = columns.map(c => c.id + (c.date || '')).join('|');
   React.useEffect(() => { setExpanded(false); if (scroller.current) scroller.current.scrollTop = 0; }, [scrollKey]);
+  // coluna do rascunho parcialmente visível → desliza para dentro da área visível.
+  // Só mexe no eixo horizontal, então convive com o reset de scrollTop acima.
+  const draftCol = draft && draft.colId;
+  React.useEffect(() => {
+    const sc = scroller.current;
+    if (!sc || !draftCol || sc.scrollWidth <= sc.clientWidth) return; // sem scroll horizontal → nada a fazer
+    const el = sc.querySelector(`[data-col-id="${draftCol}"]`);
+    if (!el) return; // coluna fora do conjunto atual (ex.: sentinela '__outra-data')
+    const MARGIN = 24; // folga visível entre a coluna e a borda do scroll
+    const sr = sc.getBoundingClientRect(), cr = el.getBoundingClientRect();
+    const delta = cr.left < sr.left + MARGIN ? cr.left - (sr.left + MARGIN)
+      : cr.right > sr.right - MARGIN ? cr.right - (sr.right - MARGIN) : 0;
+    if (delta) sc.scrollBy({ left: delta, behavior: 'smooth' });
+  }, [draftCol, scrollKey, colW]);
   const hours = []; for (let h = trimStart; h <= endMin; h += 60) hours.push(h);
   return (
     <div ref={scroller} style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
-      <div style={{ minWidth: gutterW + columns.length * colW, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ minWidth: gutterW + columns.length * colFloorW, display: 'flex', flexDirection: 'column' }}>
         {/* sticky header */}
         <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', background: WT.raised, borderBottom: `1px solid ${WT.border}` }}>
-          <div style={{ width: gutterW, flex: 'none', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
+          <div style={{ width: gutterW, flex: 'none', position: 'sticky', left: 0, zIndex: 1, background: WT.raised, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
             {(expanded || firstContent != null) && trimFull > startMin && (
               <button onClick={() => setExpanded(v => !v)} title={expanded ? `Ocultar horários vazios (${fmtMin(startMin)}–${fmtMin(trimFull)})` : `Mostrar horários anteriores (${fmtMin(startMin)}–${fmtMin(trimFull)})`}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 3, height: 20, padding: '0 6px', borderRadius: WT.pill, border: `1px solid ${WT.border}`, background: '#fff', color: WT.muted, fontFamily: WT.font, fontSize: 10.5, cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
@@ -355,7 +424,7 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
             )}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
+            <div key={c.id} style={{ flex: 1, minWidth: colFloorW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
               {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} subParts={c.subParts} occupancy={c.occupancy} />}
             </div>
           ))}
@@ -363,13 +432,14 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
         {/* body — 24px reservados no topo para as abas de nome de grade (ancoradas acima do 1º slot) */}
         <div style={{ display: 'flex', paddingTop: 24 }}>
           {/* time gutter */}
-          <div style={{ width: gutterW, flex: 'none', position: 'relative', height: (endMin - trimStart) * pxPerMin }}>
+          {/* sticky no eixo horizontal: as horas nunca saem da vista quando o grid rola de lado */}
+          <div style={{ width: gutterW, flex: 'none', position: 'sticky', left: 0, zIndex: 9, background: WT.raised, height: (endMin - trimStart) * pxPerMin }}>
             {hours.map(h => (
               <div key={h} style={{ position: 'absolute', top: (h - trimStart) * pxPerMin - 7, right: 8, fontSize: 11, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>{fmtMin(h)}</div>
             ))}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
+            <div key={c.id} data-col-id={c.id} style={{ flex: 1, minWidth: colFloorW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
               <ColumnTrack colId={c.id} appts={c.appts} blocks={c.blocks} startMin={trimStart} endMin={endMin}
                 slotMin={slotMin} pxPerMin={pxPerMin} cardStyle={cardStyle} freeOnly={freeOnly} bookable={c.bookable !== false} showPro={c.showPro != null ? c.showPro : showPro} grades={c.grades} coverage={c.coverage}
                 onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} isToday={c.date === dateForToday} />
@@ -410,35 +480,81 @@ function getGridConf(state) {
   return { startMin, endMin, slotMin: 5, pxPerMin, zoom };
 }
 
-// is a column bookable under the current especialidade / sala filter?
-function bookingFilterActive(f) { return !!((f.spec || []).length || (f.unit || []).length || (f.room || []).length || (f.conv || []).length); }
-function colBookable(col, f, date) {
-  const roomName = col.kind === 'room' ? col.entity.name : (col.entity.room || null);
-  const unitName = col.entity.unit || null;
-  const specs = f.spec || [], units = f.unit || [], rooms = f.room || [], convs = f.conv || [];
-  if (specs.length && col.kind === 'pro' && !specs.some(s => proHasSpec(col.entity, s))) return false;
-  if (specs.length && col.kind !== 'pro' && !specs.includes(col.entity.spec)) return false;
-  if (units.length && !units.includes(unitName)) return false;
-  if (rooms.length && !rooms.includes(roomName)) return false;
-  // convênio filter must be accepted by at least one of the pro's grades that day
-  if (convs.length && col.kind === 'pro' && date && !convs.some(c => dayAcceptsCond(col.entity.id, date, { conv: c }))) return false;
-  return true;
+// coluna "reservável" sob os filtros ativos — o que não casa aparece hachurado
+function colBookable(col, f, date) { return fitsFilters(col.kind, col.entity, f, date); }
+
+// ---- Seleção de agendas (Dia + Semana) --------------------------------------
+// state.sel = { pros, off, extra }
+//   pros  null = padrão (todos os que atendem na data) · array = seleção fixada à mão
+//   off   médicos desmarcados enquanto há filtros; o override morre quando o médico
+//         deixa de casar com os filtros (só edição de filtro poda, troca de data não)
+//   extra equipamentos/salas escolhidos à mão — nunca automáticos, sempre lembrados
+//         (quando param de casar ficam suspensos: somem da lista, voltam marcados)
+// Sem nenhum filtro, sel.pros volta a valer sozinho: é o "estado antes dos filtros".
+const selOf = state => state.sel || { pros: null, off: [], extra: [] };
+// filtro implícito e não removível: no Dia, quem atende naquele dia; na Semana,
+// quem atende em algum dia da semana visível
+function worksInContext(proId, state) {
+  const days = state.view === 'semana'
+    ? dateUtil.weekDaysOf(state.date, state.weekHideWeekend ? 5 : 6)
+    : [state.date];
+  return days.some(d => gradesFor(proId, d).length > 0);
+}
+function agendaSections(state) {
+  const f = state.filters, d = state.date;
+  return [
+    { kind: 'pro',   title: 'Médicos',      items: PROS.filter(p => worksInContext(p.id, state) && fitsFilters('pro', p, f, d)) },
+    { kind: 'equip', title: 'Equipamentos', items: EQUIP.filter(e => fitsFilters('equip', e, f, d)) },
+    { kind: 'room',  title: 'Salas',        items: ROOMS.filter(r => fitsFilters('room', r, f, d)) },
+  ];
+}
+// overrides só sobrevivem enquanto o médico continua casando com os filtros
+function prunedOff(off, filters, date) {
+  if (!hasAgendaFilters(filters)) return [];
+  return (off || []).filter(id => { const p = PROS.find(x => x.id === id); return p && fitsFilters('pro', p, filters, date); });
 }
 
-// shared agenda selection (Dia + Semana): profissionais (filters.pros) + extraResources
 function agendaSelection(state, set) {
-  const allPros = PROS.map(p => p.id);
-  // pros: null = todas as agendas; array (mesmo vazio) = seleção explícita (permite "nenhuma")
-  const proSel = state.filters.pros;
-  const proIds = proSel == null ? allPros : proSel;
-  const selected = [...proIds.map(id => ({ kind: 'pro', id })), ...(state.extraResources || [])];
-  const add = res => res.kind === 'pro'
-    ? set(s => ({ filters: { ...s.filters, pros: [...(s.filters.pros == null ? allPros : s.filters.pros), res.id] } }))
-    : set(s => ({ extraResources: [...(s.extraResources || []), res] }));
-  const remove = res => res.kind === 'pro'
-    ? set(s => ({ filters: { ...s.filters, pros: (s.filters.pros == null ? allPros : s.filters.pros).filter(id => id !== res.id) } }))
-    : set(s => ({ extraResources: (s.extraResources || []).filter(r => !(r.kind === res.kind && r.id === res.id)) }));
-  return { selected, add, remove, allPros, proIds, date: state.date };
+  const sections = agendaSections(state);
+  const sel = selOf(state);
+  const filtered = hasAgendaFilters(state.filters);
+  const listedPros = sections[0].items.map(p => p.id);
+  // com filtro: tudo que casa, menos os overrides · sem filtro: a seleção fixada
+  const proIds = filtered
+    ? listedPros.filter(id => !(sel.off || []).includes(id))
+    : (sel.pros == null ? listedPros : listedPros.filter(id => sel.pros.includes(id)));
+  const isListed = res => sections.some(s => s.kind === res.kind && s.items.some(it => it.id === res.id));
+  const extra = (sel.extra || []).filter(r => r.kind !== 'pro' && isListed(r));
+  const selected = [...proIds.map(id => ({ kind: 'pro', id })), ...extra];
+  const isOn = res => selected.some(r => r.kind === res.kind && r.id === res.id);
+
+  const toggle = res => set(s => {
+    const cur = selOf(s);
+    if (res.kind !== 'pro') {
+      const on = (cur.extra || []).some(r => r.kind === res.kind && r.id === res.id);
+      return { sel: { ...cur, extra: on ? cur.extra.filter(r => !(r.kind === res.kind && r.id === res.id)) : [...(cur.extra || []), res] } };
+    }
+    if (hasAgendaFilters(s.filters)) {   // modo filtrado → a edição vira override
+      const off = cur.off || [];
+      return { sel: { ...cur, off: off.includes(res.id) ? off.filter(id => id !== res.id) : [...off, res.id] } };
+    }
+    const base = cur.pros == null ? listedPros : cur.pros;  // editar fixa a seleção
+    return { sel: { ...cur, pros: base.includes(res.id) ? base.filter(id => id !== res.id) : [...base, res.id] } };
+  });
+
+  const setFilters = next => set(s => ({ filters: next, sel: { ...selOf(s), off: prunedOff(selOf(s).off, next, s.date) } }));
+  const filterApi = {
+    toggleValue: (key, value) => {
+      const cur = state.filters[key] || [];
+      setFilters({ ...state.filters, [key]: cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value] });
+    },
+    clearKey: key => setFilters({ ...state.filters, [key]: [] }),
+    clearAll: () => set(s => ({ filters: emptyFilters(), sel: { ...selOf(s), off: [] } })),
+  };
+
+  const add = res => { if (!isOn(res)) toggle(res); };
+  const remove = res => { if (isOn(res)) toggle(res); };
+  return { selected, sections, isOn, toggle, add, remove, filtered, filters: state.filters, filterApi, date: state.date };
 }
 
 // Dia = multi-resource view (profissionais + equipamentos + salas em colunas)
@@ -456,7 +572,7 @@ function DayView({ state, set, appts, blocks, drag, onSlotClick, onCardOpen, onB
       {state.agendasPlacement !== 'sidebar' && <ResourceBar selected={selected} onAdd={add} onRemove={remove} date={state.date} />}
       <div style={{ flex: 1, minHeight: 0 }}>
         {columns.length === 0
-          ? <EmptyState icon="layout-grid" title="Nenhuma agenda selecionada" hint="Use “Adicionar agenda” para incluir profissionais, equipamentos ou salas." />
+          ? <EmptyState icon="layout-grid" title="Nenhuma agenda selecionada" hint="Marque profissionais, equipamentos ou salas em “Agendas”, na barra lateral." />
           : <ColumnGrid columns={columns} {...conf} cardStyle={state.cardStyle} freeOnly={hf} dateForToday={state.date === TODAY ? state.date : null}
               onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} colMinWidth={columns.length <= 2 ? 340 : 210} />}
       </div>
@@ -466,7 +582,7 @@ function DayView({ state, set, appts, blocks, drag, onSlotClick, onCardOpen, onB
 
 function WeekView({ state, set, appts, blocks, drag, onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft }) {
   const conf = getGridConf(state);
-  // SAME selection source & UX as Dia: filters.pros + extraResources, ResourceBar
+  // mesma seleção do Dia (agendaSelection) — aqui só muda o eixo das colunas
   const { selected, add, remove } = agendaSelection(state, set);
 
   const days = dateUtil.weekDaysOf(state.date, state.weekHideWeekend ? 5 : 6);
@@ -663,28 +779,200 @@ function ResourceBar({ selected, onAdd, onRemove, trailing, only, addLabel, date
   );
 }
 
-// vertical agenda selector for the sidebar (mesma seleção do ResourceBar, layout empilhado)
-function AgendaSidebarPanel({ selected, onAdd, onRemove, date }) {
-  const [pick, setPick] = React.useState(null);
+// ---- Menu de filtros do seletor de agendas ---------------------------------
+// Segue o dropdown do design: popover branco, busca sem moldura + divisória,
+// itens de 32px com raio 8 e realce neutro no hover. Nada de cor de destaque:
+// o menu é uma lista, não um estado.
+const FMENU_W = 228;
+
+function FilterSearch({ value, onChange, placeholder }) {
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px', margin: 8, flex: 'none' }}>
+        <WIcon name="search" size={16} color={WT.muted} />
+        <input autoFocus value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+          style={{ border: 'none', outline: 'none', font: `${WT.wBody} 14px ${WT.font}`, flex: 1, background: 'transparent', color: WT.fg, minWidth: 0 }} />
+      </div>
+      <div style={{ height: 1, background: WT.borderSub, flex: 'none' }} />
+    </>
+  );
+}
+
+// linha do menu (categoria ou valor) — item de dropdown do design system
+function FilterMenuRow({ icon, label, trailing, lead, on, onClick, onHover }) {
+  return (
+    <button onClick={onClick} onMouseEnter={e => { e.currentTarget.style.background = WT.hover; if (onHover) onHover(e); }}
+      onMouseLeave={e => { e.currentTarget.style.background = on ? WT.hover : 'transparent'; }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 32, padding: '0 8px', borderRadius: WT.rM,
+        border: 'none', background: on ? WT.hover : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wBody, color: WT.fg }}>
+      {lead}
+      {icon && <WIcon name={icon} size={16} color={WT.muted} />}
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      {trailing}
+    </button>
+  );
+}
+
+// valores de uma categoria: marcados com um check à esquerda (não checkbox —
+// aqui é menu, a caixa fica na lista de agendas, onde a seleção é o assunto)
+function FilterValueList({ cat, selected, api }) {
+  const [q, setQ] = React.useState('');
+  const ql = normq(q.trim());
+  const opts = cat.values().filter(o => !ql || normq(o.label).includes(ql));
+  return (
+    <>
+      <FilterSearch value={q} onChange={setQ} placeholder={`Filtrar ${cat.label.toLowerCase()}`} />
+      <div style={{ maxHeight: 288, overflow: 'auto', padding: 8 }}>
+        {opts.length === 0
+          ? <div style={{ padding: '12px 8px', fontSize: 13, color: WT.muted }}>Nada encontrado.</div>
+          : opts.map(o => (
+              <FilterMenuRow key={o.value} label={o.label} onClick={() => api.toggleValue(cat.key, o.value)}
+                lead={<span style={{ width: 16, flex: 'none', display: 'inline-flex', justifyContent: 'center' }}>
+                  {selected.includes(o.value) && <WIcon name="check" size={14} color={WT.fg2} />}
+                </span>} />
+            ))}
+      </div>
+    </>
+  );
+}
+
+// menu raiz: categorias (submenu abre no HOVER, sobrepondo 8px) ou, ao buscar,
+// os VALORES que casam agrupados por categoria
+function AgendaFilterMenu({ anchorRect, onClose, filters, api }) {
+  const cats = agendaFilterCats();
+  const [q, setQ] = React.useState('');
+  const [sub, setSub] = React.useState(null);   // { key, rect }
+  const ql = normq(q.trim());
+  const groups = ql
+    ? cats.map(c => ({ cat: c, items: c.values().filter(o => normq(o.label).includes(ql)) })).filter(g => g.items.length)
+    : [];
+  const subCat = sub && cats.find(c => c.key === sub.key);
+  return (
+    <WPopover anchorRect={anchorRect} onClose={onClose} width={FMENU_W}>
+      <FilterSearch value={q} onChange={v => { setQ(v); setSub(null); }} placeholder="Filtrar" />
+      <div style={{ maxHeight: 320, overflow: 'auto', padding: 8 }}>
+        {ql
+          ? (groups.length === 0
+              ? <div style={{ padding: '12px 8px', fontSize: 13, color: WT.muted }}>Nada encontrado para “{q}”.</div>
+              : groups.map(g => (
+                  <div key={g.cat.key}>
+                    <div style={{ padding: '8px 8px 4px', fontSize: 11, fontWeight: WT.wEmph, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>{g.cat.label}</div>
+                    {g.items.map(o => (
+                      <FilterMenuRow key={o.value} label={o.label} onClick={() => api.toggleValue(g.cat.key, o.value)}
+                        lead={<span style={{ width: 16, flex: 'none', display: 'inline-flex', justifyContent: 'center' }}>
+                          {(filters[g.cat.key] || []).includes(o.value) && <WIcon name="check" size={14} color={WT.fg2} />}
+                        </span>} />
+                    ))}
+                  </div>
+                )))
+          : cats.map(c => (
+              <FilterMenuRow key={c.key} icon={c.icon} label={c.label} on={sub && sub.key === c.key}
+                trailing={<WIcon name="chevron-right" size={12} color={WT.muted} />}
+                onHover={e => setSub({ key: c.key, rect: e.currentTarget.getBoundingClientRect() })}
+                onClick={e => setSub({ key: c.key, rect: e.currentTarget.getBoundingClientRect() })} />
+            ))}
+      </div>
+      {/* submenu dentro do popover raiz (clique nele não fecha o pai) · offset 0
+          encosta na borda interna → os dois se sobrepõem 8px, como no design */}
+      {subCat && (
+        <WPopover anchorRect={sub.rect} onClose={() => setSub(null)} width={FMENU_W} offset={0}>
+          <FilterValueList cat={subCat} selected={filters[subCat.key] || []} api={api} />
+        </WPopover>
+      )}
+    </WPopover>
+  );
+}
+
+// chips dos filtros ativos — "Convênio: Unimed ×" · clique edita, × limpa
+function AgendaFilterChips({ filters, api, onEdit }) {
+  const cats = agendaFilterCats().filter(c => (filters[c.key] || []).length);
+  if (!cats.length) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      {cats.map(c => {
+        const vals = filters[c.key];
+        const one = vals.length === 1 ? (c.values().find(o => o.value === vals[0]) || {}).label : null;
+        return (
+          <span key={c.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%', height: 24, padding: '0 8px', borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff' }}>
+            <button onClick={e => onEdit(c.key, e.currentTarget.getBoundingClientRect())} title="Editar filtro"
+              style={{ display: 'block', minWidth: 0, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 12, fontWeight: WT.wBody, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {c.label}: <span style={{ fontWeight: WT.wEmph }}>{one || `${vals.length} selecionados`}</span>
+            </button>
+            <button onClick={() => api.clearKey(c.key)} title={`Remover filtro de ${c.label.toLowerCase()}`}
+              style={{ flex: 'none', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'inline-flex' }}>
+              <WIcon name="x" size={12} color={WT.fg2} />
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// seletor de agendas da barra lateral: filtros + seções por tipo de recurso
+function AgendaSidebarPanel({ sel }) {
+  const { sections, isOn, toggle, filters, filterApi, filtered } = sel;
+  const [menu, setMenu] = React.useState(null);   // popover raiz (botão de filtro)
+  const [catPop, setCatPop] = React.useState(null); // popover de UMA categoria (chip)
+  const [shut, setShut] = React.useState({});     // seções recolhidas
+  const cats = agendaFilterCats();
+  const catPopCat = catPop && cats.find(c => c.key === catPop.key);
+  // sem médico não há agenda: equipamento e sala sozinhos não têm o que mostrar
+  const noPros = sections[0].items.length === 0;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 0 0 4px' }}>
         <span style={{ flex: 1, fontSize: 11, fontWeight: WT.wEmph, color: WT.fg2, textTransform: 'uppercase', letterSpacing: '.05em' }}>Agendas</span>
-        {selected.length > 0 && <WBadge type="neutral">{selected.length}</WBadge>}
+        <WIconButton name="list-filter" title="Filtrar agendas" dim={28} size={16} active={!!menu}
+          onClick={e => setMenu({ rect: e.currentTarget.getBoundingClientRect() })} />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 216, overflow: 'auto', margin: '0 -2px', padding: '0 2px' }}>
-        {selected.map(res => { const m = resourceMeta(res); if (!m) return null; const icon = res.kind === 'pro' ? 'user-round' : res.kind === 'equip' ? 'activity' : 'door-open'; return (
-          <div key={res.kind + res.id} style={{ display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 4px 0 10px', borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff', fontSize: 13, color: WT.fg }}>
-            <WIcon name={icon} size={14} color={m.color || WT.muted} />
-            <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.short || m.name}</span>
-            <button onClick={() => onRemove(res)} title="Remover" style={{ width: 22, height: 22, borderRadius: WT.rS, border: 'none', background: 'transparent', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><WIcon name="x" size={13} color={WT.muted} /></button>
+
+      <AgendaFilterChips filters={filters} api={filterApi} onEdit={(key, rect) => setCatPop({ key, rect })} />
+
+      {noPros
+        ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, padding: '2px 4px 4px' }}>
+            <span style={{ fontSize: 12.5, color: WT.muted }}>
+              {filtered ? 'Nenhuma agenda corresponde aos filtros.' : 'Ninguém atende nesta data.'}
+            </span>
+            {filtered && <WButton variant="default" size="s" leadingIcon="filter-x" label="Limpar filtros" onClick={filterApi.clearAll} />}
           </div>
-        ); })}
-      </div>
-      <button onClick={e => setPick(e.currentTarget.getBoundingClientRect())} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', height: 34, borderRadius: WT.rM, border: `1px dashed ${WT.borderHover}`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 13, fontWeight: WT.wEmph, color: WT.accent }}>
-        <WIcon name="plus" size={14} color={WT.accent} /> Adicionar agenda
-      </button>
-      {pick && <ResourcePicker selected={selected} anchorRect={pick} date={date} onClose={() => setPick(null)} onToggle={res => (selected.some(r => r.kind === res.kind && r.id === res.id) ? onRemove(res) : onAdd(res))} />}
+        : sections.filter(sec => sec.items.length || filtered).map((sec, i) => {
+            const closed = !!shut[sec.kind];
+            return (
+              // 24 + o gap 8 do container = 32px entre seções: tipos de recurso
+              // diferentes precisam ler como blocos separados, não como uma lista só
+              <div key={sec.kind} style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: i ? 24 : 0 }}>
+                <button onClick={() => setShut(s => ({ ...s, [sec.kind]: !s[sec.kind] }))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '3px 4px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: WT.font, borderRadius: WT.rS }}
+                  onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <span style={{ flex: 1, textAlign: 'left', fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>{sec.title}</span>
+                  <WIcon name={closed ? 'chevron-down' : 'chevron-up'} size={14} color={WT.muted} />
+                </button>
+                {!closed && (sec.items.length
+                  ? sec.items.map(it => {
+                      const res = { kind: sec.kind, id: it.id }; const on = isOn(res);
+                      return (
+                        <button key={it.id} onClick={() => toggle(res)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '5px 6px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, fontSize: 13, color: WT.fg, borderRadius: WT.rS }}
+                          onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <span style={{ width: 15, height: 15, borderRadius: WT.rS, flex: 'none', border: `1.5px solid ${on ? WT.accentFill : WT.borderHover}`, background: on ? WT.accentFill : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {on && <WIcon name="check" size={11} color="#fff" strokeWidth={3} />}
+                          </span>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', flex: 'none', background: it.color || WT.muted }} />
+                          <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.short || it.name}</span>
+                        </button>
+                      );
+                    })
+                  : <span style={{ padding: '3px 6px 6px', fontSize: 12, color: WT.muted }}>Nenhum resultado.</span>)}
+              </div>
+            );
+          })}
+
+      {menu && <AgendaFilterMenu anchorRect={menu.rect} filters={filters} api={filterApi} onClose={() => setMenu(null)} />}
+      {catPopCat && (
+        <WPopover anchorRect={catPop.rect} onClose={() => setCatPop(null)} width={FMENU_W}>
+          <FilterValueList cat={catPopCat} selected={filters[catPopCat.key] || []} api={filterApi} />
+        </WPopover>
+      )}
     </div>
   );
 }
@@ -753,8 +1041,8 @@ function EquipmentView({ state, set, appts, blocks, drag, onSlotClick, onCardOpe
 function RoomView({ state, appts, blocks, drag, onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft }) {
   const conf = getGridConf(state);
   const hf = state.freeOnly; // realce de horários livres só quando "Somente horários livres" estiver ativo
-  const units = state.filters.unit || [], roomsF = state.filters.room || [];
-  const rooms = ROOMS.filter(r => (!units.length || units.includes(r.unit)) && (!roomsF.length || roomsF.includes(r.name)));
+  const units = state.filters.unit || [];
+  const rooms = ROOMS.filter(r => !units.length || units.includes(r.unit));
   const columns = rooms.map(r => {
     const ca = appts.filter(a => a.date === state.date && effectiveRoom(a) === r.name);
     // bloqueios da clínica inteira (feriado) valem para todas as salas
@@ -891,4 +1179,4 @@ function MonthView({ state, set, appts, blocks }) {
   );
 }
 
-Object.assign(window, { NOW_MIN, filterAppts, visiblePros, occupancyOf, OccupancyRing, ColumnGrid, ColumnTrack, ColHeader, EmptyState, getGridConf, DayView, WeekView, MultipleView, EquipmentView, RoomView, ProgramacaoView, MonthView, ResourceBar, ResourcePicker, resourceMeta, agendaSelection, AgendaSidebarPanel });
+Object.assign(window, { NOW_MIN, filterAppts, visiblePros, occupancyOf, OccupancyRing, ColumnGrid, ColumnTrack, ColHeader, EmptyState, getGridConf, DayView, WeekView, MultipleView, EquipmentView, RoomView, ProgramacaoView, MonthView, ResourceBar, ResourcePicker, resourceMeta, agendaSelection, AgendaSidebarPanel, AGENDA_FILTERS, agendaFilterCats, emptyFilters, hasAgendaFilters, fitsFilters });
