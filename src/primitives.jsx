@@ -273,10 +273,10 @@ function WToggle({ checked, onChange, label }) {
 }
 
 // ---- Segmented control ------------------------------------------------------
-function WSegmented({ options, value, onChange, size = 'm' }) {
+function WSegmented({ options, value, onChange, size = 'm', fullWidth }) {
   const h = size === 'l' ? 38 : 32;
   return (
-    <div style={{ display: 'inline-flex', background: '#fff', border: `1px solid ${WT.border}`, borderRadius: WT.rM, padding: 3, gap: 2, boxShadow: WT.shEmphasis }}>
+    <div style={{ display: fullWidth ? 'flex' : 'inline-flex', background: '#fff', border: `1px solid ${WT.border}`, borderRadius: WT.rM, padding: 3, gap: 2, boxShadow: WT.shEmphasis }}>
       {options.map(o => {
         const opt = typeof o === 'string' ? { value: o, label: o } : o;
         const on = opt.value === value;
@@ -284,7 +284,8 @@ function WSegmented({ options, value, onChange, size = 'm' }) {
           <button key={opt.value} onClick={() => onChange && onChange(opt.value)} style={{
             height: h - 8, padding: '0 12px', borderRadius: 5, border: 'none', cursor: 'pointer',
             fontFamily: WT.font, fontSize: 14, fontWeight: on ? WT.wEmph : WT.wBody,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            flex: fullWidth ? 1 : 'none',
             background: on ? WT.accentSoft : 'transparent', color: on ? WT.accent : WT.fg2,
           }}>
             {opt.icon && <WIcon name={opt.icon} size={15} color={on ? WT.accent : WT.muted} />}

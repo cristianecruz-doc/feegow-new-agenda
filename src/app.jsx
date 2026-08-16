@@ -72,11 +72,11 @@ function App() {
 
   const [ctxCard, setCtxCard] = React.useState(null);  // {a, rect}
   const [quick, setQuick] = React.useState(null);       // {ctx, rect}
-  const [booking, setBooking] = React.useState(null);   // {init}
+  const [booking, setBooking] = React.useState(null);   // {init, kind, key} — painel lateral de criação/edição
   const [cancel, setCancel] = React.useState(null);     // {a}
-  const [blockM, setBlockM] = React.useState(null);     // {ctx}
   const [blockPick, setBlockPick] = React.useState(null); // [blocks] — chooser na semanal
   const [draft, setDraft] = React.useState(null); // {colId, time, dur} — placeholder do agendamento em criação
+  const [slotPick, setSlotPick] = React.useState(null); // {…slot, seq} — clique no grid com o painel aberto
   const [reschedule, setReschedule] = React.useState(null);   // { a, prevFreeOnly } — modo remarcação (fluxo aberto)
   const [toast, setToast] = React.useState(null);
   const [width, setWidth] = React.useState(window.innerWidth);
@@ -137,13 +137,12 @@ function App() {
     return na;
   }
 
-  const openBooking = init => { setQuick(null); setCtxCard(null); setBooking({ init }); };
+  const openBooking = (init, kind = 'agendamento') => { setQuick(null); setCtxCard(null); setSlotPick(null); setBooking({ init, kind, key: uid() }); };
+  const closeBooking = () => { setBooking(null); setDraft(null); setSlotPick(null); };
+  const openBlockEdit = b => openBooking({ block: b, date: b.date, time: b.allDay ? null : b.start, proId: app.dayPro }, 'bloqueio');
 
-  function onCreate(kind) {
-    const base = { date: state.date, time: '08:00', proId: app.dayPro };
-    if (kind === 'bloqueio') { setBlockM({ ctx: { proId: app.dayPro, date: state.date, time: '12:00' } }); return; }
-    if (kind === 'encaixe') { openBooking({ ...base, fitIn: true }); return; }
-    openBooking(base);
+  function onCreate() {
+    openBooking({ date: state.date, time: '08:00', proId: app.dayPro });
   }
 
   // escolhe o profissional com horário vago no slot clicado (preferência p/ quem tem grade e sem conflito)
@@ -168,10 +167,13 @@ function App() {
       ctx.pickPro = true;
     }
     setDraft({ colId, time: ctx.time, dur: gradeSlotAt(ctx.proId, slot.date, ctx.time) || 30 });
+    // painel lateral aberto → o grid vira um seletor: o clique preenche data/hora/profissional
+    if (booking) { setSlotPick(s => ({ ...ctx, seq: (s ? s.seq : 0) + 1 })); return; }
     if (BOOKING_FLOW === 'two-tier') setQuick({ ctx, rect });
     else openBooking(ctx);
   }
-  const onDraft = patch => setDraft(d => d ? { ...d, ...patch } : d);
+  // painel aberto → o placeholder existe mesmo sem clique no grid (pré-visualização ao vivo)
+  const onDraft = patch => setDraft(d => (d || booking) ? { ...(d || {}), ...patch } : d);
 
   function onQuickSave(payload) {
     const na = commitNew(payload);
@@ -180,12 +182,24 @@ function App() {
     flash(`Agendamento criado · ${pt.name} ${na.start}`);
   }
 
-  function onBookingSave({ form, checkin }) {
+  function onBookingSave({ form, checkin, fitIn }) {
     const patient = form.patient;
-    const na = commitNew({ patient, procIds: form.procIds, time: form.time, proId: form.proId, date: form.date, equip: form.equip || null, room: form.local, form: { ...form, _checkin: checkin }, fitIn: booking && booking.init && booking.init.fitIn });
-    setBooking(null); setDraft(null);
+    const na = commitNew({ patient, procIds: form.procIds, time: form.time, proId: form.proId, date: form.date, equip: form.equip || null, room: form.local, form: { ...form, _checkin: checkin }, fitIn });
+    closeBooking();
     const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
     flash(checkin ? `Agendado e check-in feito · ${pt.name}` : `Agendamento salvo · ${pt.name} ${na.start}`);
+  }
+
+  // ---- bloqueios (formulário vive no painel lateral) -------------------------
+  function onBlockConfirm(info) {
+    if (info.id) { setBlocks(s => s.map(b => b.id === info.id ? { ...b, ...info } : b)); flash('Bloqueio atualizado'); }
+    else { setBlocks(s => [...s, { ...info, id: uid() }]); flash('Horário bloqueado'); }
+    closeBooking();
+  }
+  function onBlockDelete(b) {
+    setBlocks(s => s.filter(x => x.id !== b.id));
+    closeBooking();
+    flash('Bloqueio excluído · horários liberados', { tone: 'danger' });
   }
 
   // ---- context-card actions ------------------------------------------------
@@ -311,7 +325,24 @@ function App() {
 
   // (waiting-list / Sala de espera feature lives in a separate project — not part of the agenda)
 
-  const viewProps = { state, set, appts: filtered, blocks, drag: dragApi, onSlotClick, onCardOpen: (a, rect) => setCtxCard({ a, rect }), onBlockOpen: b => setBlockM({ block: b }), onBlockPick: bs => setBlockPick(bs), draft };
+  // com o painel aberto, o placeholder segue o profissional/data do formulário (coluna certa)
+  const liveDraft = React.useMemo(() => {
+    if (!draft) return null;
+    if (!booking) return draft;
+    const d = { ...draft };
+    if (state.view === 'semana') d.colId = 'd' + (d.date || state.date);
+    else if (d.proId) d.colId = (d.date && d.date !== state.date) ? '__outra-data' : 'pro:' + d.proId;
+    return d;
+  }, [draft, booking, app.view, app.date]);
+
+  const viewProps = { state, set, appts: filtered, blocks, drag: dragApi, onSlotClick, onCardOpen: (a, rect) => setCtxCard({ a, rect }), onBlockOpen: openBlockEdit, onBlockPick: bs => setBlockPick(bs), draft: liveDraft };
+
+  const bookingHost = booking && (
+    <BookingHost key={booking.key} init={booking.init} kind={booking.kind} config={config} compact={compact} perms={PERMS}
+      appts={appts} flash={flash} slotPick={slotPick}
+      onCancel={closeBooking} onSave={onBookingSave} onDraft={onDraft}
+      onBlockConfirm={onBlockConfirm} onBlockDelete={onBlockDelete} />
+  );
 
   // Seletor de agendas na barra lateral (só nas views multi-recurso Dia/Semana)
   const agendasInSidebar = app.agendasPlacement === 'sidebar';
@@ -349,6 +380,7 @@ function App() {
               {state.view === 'sala' && <RoomView {...viewProps} />}
               {state.view === 'programacao' && <ProgramacaoView {...viewProps} />}
             </div>
+            {!compact && bookingHost}
           </div>
             </>}
         </main>
@@ -358,17 +390,9 @@ function App() {
       {ctxCard && <ContextCard a={appts.find(x => x.id === ctxCard.a.id) || ctxCard.a} anchorRect={ctxCard.rect || { left: width / 2, right: width / 2, top: 120, bottom: 120 }} onClose={() => setCtxCard(null)}
         onReschedule={doReschedule} onCancel={doCancel} onOpen={openEdit} onRetorno={doRetorno} />}
       {quick && <QuickCreatePopover ctx={quick.ctx} anchorRect={quick.rect} onClose={() => { setQuick(null); setDraft(null); }} onMore={ctx => openBooking(ctx)} onSave={onQuickSave} onDraft={onDraft} />}
-      {booking && <BookingHost init={booking.init} config={config} flow={BOOKING_FLOW === 'two-tier' ? 'drawer' : BOOKING_FLOW} compact={compact} perms={PERMS} appts={appts} flash={flash} onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} />}
+      {compact && bookingHost}
       {cancel && <CancelModal a={cancel.a} onClose={() => setCancel(null)} onConfirm={confirmCancel} />}
-      {blockM && <BlockModal ctx={blockM.ctx || {}} block={blockM.block} appts={appts}
-        onClose={() => setBlockM(null)}
-        onConfirm={info => {
-          if (info.id) { setBlocks(s => s.map(b => b.id === info.id ? { ...b, ...info } : b)); flash('Bloqueio atualizado'); }
-          else { setBlocks(s => [...s, { ...info, id: uid() }]); flash('Horário bloqueado'); }
-          setBlockM(null);
-        }}
-        onDelete={b => { setBlocks(s => s.filter(x => x.id !== b.id)); setBlockM(null); flash('Bloqueio excluído · horários liberados', { tone: 'danger' }); }} />}
-      {blockPick && <BlockChooser blocks={blockPick} onClose={() => setBlockPick(null)} onPick={b => { setBlockPick(null); setBlockM({ block: b }); }} />}
+      {blockPick && <BlockChooser blocks={blockPick} onClose={() => setBlockPick(null)} onPick={b => { setBlockPick(null); openBlockEdit(b); }} />}
       {dropError && <CenterModal
         title={dropError.kind === 'conv' ? 'Convênio não atendido' : 'Serviço não oferecido'}
         icon="alert-triangle" iconTone="danger" width={430} onClose={() => setDropError(null)}
