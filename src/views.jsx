@@ -355,6 +355,20 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   const trimStart = expanded ? startMin : trimFull;
   const scrollKey = columns.map(c => c.id + (c.date || '')).join('|');
   React.useEffect(() => { setExpanded(false); if (scroller.current) scroller.current.scrollTop = 0; }, [scrollKey]);
+  // coluna do rascunho parcialmente visível → desliza para dentro da área visível.
+  // Só mexe no eixo horizontal, então convive com o reset de scrollTop acima.
+  const draftCol = draft && draft.colId;
+  React.useEffect(() => {
+    const sc = scroller.current;
+    if (!sc || !draftCol || sc.scrollWidth <= sc.clientWidth) return; // sem scroll horizontal → nada a fazer
+    const el = sc.querySelector(`[data-col-id="${draftCol}"]`);
+    if (!el) return; // coluna fora do conjunto atual (ex.: sentinela '__outra-data')
+    const MARGIN = 24; // folga visível entre a coluna e a borda do scroll
+    const sr = sc.getBoundingClientRect(), cr = el.getBoundingClientRect();
+    const delta = cr.left < sr.left + MARGIN ? cr.left - (sr.left + MARGIN)
+      : cr.right > sr.right - MARGIN ? cr.right - (sr.right - MARGIN) : 0;
+    if (delta) sc.scrollBy({ left: delta, behavior: 'smooth' });
+  }, [draftCol, scrollKey, colW]);
   const hours = []; for (let h = trimStart; h <= endMin; h += 60) hours.push(h);
   return (
     <div ref={scroller} style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
@@ -385,7 +399,7 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
             ))}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
+            <div key={c.id} data-col-id={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
               <ColumnTrack colId={c.id} appts={c.appts} blocks={c.blocks} startMin={trimStart} endMin={endMin}
                 slotMin={slotMin} pxPerMin={pxPerMin} cardStyle={cardStyle} freeOnly={freeOnly} bookable={c.bookable !== false} showPro={c.showPro != null ? c.showPro : showPro} grades={c.grades} coverage={c.coverage}
                 onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} isToday={c.date === dateForToday} />

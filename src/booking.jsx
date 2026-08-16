@@ -129,6 +129,8 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus, noLabel
 
 // ---- Quick-create popover (Tier 1) ------------------------------------------
 function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft }) {
+  // tipo definido na abertura pelo horário clicado (ocupado → encaixe) e daí em diante do usuário
+  const [kind, setKind] = React.useState(ctx.fitIn ? 'encaixe' : 'agendamento');
   const [proId, setProId] = React.useState(ctx.proId);
   const pro = PROS.find(p => p.id === proId) || PROS[0];
   const proOptions = ctx.proOptions && ctx.proOptions.length ? ctx.proOptions : PROS.map(p => p.id);
@@ -163,7 +165,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
   // clear incompatible procedures when the grade changes
   React.useEffect(() => { if (grade && grade.procs) setProcIds(ids => ids.filter(id => grade.procs.includes(id))); }, [time]);
   // mantém o placeholder no grid sincronizado com horário + duração em criação
-  React.useEffect(() => { onDraft && onDraft({ time, dur: totalDur || gradeSlotAt(proId, ctx.date, time) || 30 }); }, [time, totalDur]);
+  React.useEffect(() => { onDraft && onDraft({ time, dur: totalDur || gradeSlotAt(proId, ctx.date, time) || 30, kind }); }, [time, totalDur, kind, proId]);
   const save = () => {
     const e = {};
     if (!patient) e.patient = 'Selecione um paciente';
@@ -174,15 +176,18 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
     if (cardExpired && requireValidCard) e.conv = `Carteirinha vencida em ${ptRec.cardExp} — atualize o cadastro para agendar por convênio`;
     if (needPrepay && !prepaid) e.prepay = 'Confirme o pagamento antecipado para agendar';
     if (Object.keys(e).length) { setErr(e); return; }
-    onSave({ ...ctx, proId, patient, procIds, time, payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular' });
+    onSave({ ...ctx, proId, patient, procIds, time, fitIn: kind === 'encaixe', payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular' });
   };
   return (
     <WPopover anchorRect={anchorRect} onClose={onClose} width={340}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 8px 10px 14px', borderBottom: `1px solid ${WT.borderSub}`, flex: 'none' }}>
-        <span style={{ flex: 1, fontSize: 15, fontWeight: WT.wHead, color: WT.fg }}>Novo agendamento</span>
+        <span style={{ flex: 1, fontSize: 15, fontWeight: WT.wHead, color: WT.fg }}>{kind === 'encaixe' ? 'Novo encaixe' : 'Novo agendamento'}</span>
         <WIconButton name="x" dim={28} onClick={onClose} />
       </div>
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {/* Bloqueio não cabe aqui (formulário próprio) — fica em "Mais opções" */}
+        <WSegmented fullWidth value={kind} onChange={setKind}
+          options={[{ value: 'agendamento', label: 'Agendamento' }, { value: 'encaixe', label: 'Encaixe' }]} />
         {ctx.pickPro ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ flex: 1 }}>
@@ -238,7 +243,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}`, background: WT.inset, flex: 'none' }}>
-        <WButton variant="plain" leadingIcon="settings-2" label="Mais opções" onClick={() => onMore({ ...ctx, patient, procIds, time })} />
+        <WButton variant="plain" leadingIcon="settings-2" label="Mais opções" onClick={() => onMore({ ...ctx, proId, patient, procIds, time, fitIn: kind === 'encaixe' })} />
         <span style={{ flex: 1 }} />
         <WButton variant="primary" leadingIcon="check" label="Salvar" onClick={save} />
       </div>
@@ -358,7 +363,8 @@ function BookingForm({ init, config, perms, slotPick, active, onCancel, onSave, 
     if (!onDraft || active === false) return;
     const ptRec = form.patient && form.patient.patientId ? patientById(form.patient.patientId) : null;
     onDraft({
-      time: form.time, dur: totalDur || 30, proId: form.proId, date: form.date,
+      // sem procedimentos a consulta dura um slot da grade naquele horário (não 30 fixos)
+      time: form.time, dur: totalDur || gradeSlotAt(form.proId, form.date, form.time) || 30, proId: form.proId, date: form.date,
       patientName: form.patient ? ((ptRec && ptRec.name) || form.patient.patientName) : null,
       procIds: form.procIds,
     });
@@ -596,7 +602,7 @@ function BookingHost({ init, kind: kindProp, config, compact, perms, appts, flas
   const _perms = perms || { editFicha: true, verConta: true };
   const TITLES = {
     agendamento: editing ? 'Editar agendamento' : 'Novo agendamento',
-    encaixe: 'Novo encaixe',
+    encaixe: editing ? 'Editar encaixe' : 'Novo encaixe',
     bloqueio: editingBlock ? 'Bloqueio' : 'Novo bloqueio',
   };
   const title = TITLES[kind] || TITLES.agendamento;
