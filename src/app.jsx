@@ -138,22 +138,29 @@ function App() {
     return na;
   }
 
-  const openBooking = (init, kind = 'agendamento') => { setQuick(null); setCtxCard(null); setSlotPick(null); setBooking({ init, kind, key: uid() }); };
+  // sem `kind` explícito, o tipo sai do próprio init (init.fitIn / init.block) — ver BookingHost
+  const openBooking = (init, kind) => { setQuick(null); setCtxCard(null); setSlotPick(null); setBooking({ init, kind, key: uid() }); };
   const closeBooking = () => { setBooking(null); setDraft(null); setSlotPick(null); };
   const openBlockEdit = b => openBooking({ block: b, date: b.date, time: b.allDay ? null : b.start, proId: app.dayPro }, 'bloqueio');
 
+  // "Criar" na barra lateral não parte de um horário do grid: é o caminho de quem está
+  // encaixando alguém, então abre como encaixe (o seletor de tipo continua à mão)
   function onCreate() {
-    openBooking({ date: state.date, time: '08:00', proId: app.dayPro });
+    openBooking({ date: state.date, time: '08:00', proId: app.dayPro }, 'encaixe');
+  }
+
+  // minuto coberto por um agendamento não-cancelado do profissional
+  function busyAt(proId, date, time) {
+    const m = toMin(time);
+    return appts.some(a => a.pro === proId && a.date === date && a.status !== 'cancelado' && m >= toMin(a.start) && m < toMin(a.start) + (a.dur || 0));
   }
 
   // escolhe o profissional com horário vago no slot clicado (preferência p/ quem tem grade e sem conflito)
   function pickFreePro(date, time, candidateIds) {
     const cands = (candidateIds && candidateIds.length) ? candidateIds : PROS.map(p => p.id);
-    const m = toMin(time);
     const hasGrade = id => !!gradeAt(id, date, time);
-    const busy = id => appts.some(a => a.pro === id && a.date === date && a.status !== 'cancelado' && m >= toMin(a.start) && m < toMin(a.start) + (a.dur || 0));
-    return cands.find(id => hasGrade(id) && !busy(id))   // grade + livre
-      || cands.find(id => hasGrade(id))                   // tem grade (mesmo ocupado)
+    return cands.find(id => hasGrade(id) && !busyAt(id, date, time))   // grade + livre
+      || cands.find(id => hasGrade(id))                                 // tem grade (mesmo ocupado)
       || cands[0];
   }
 
@@ -167,9 +174,14 @@ function App() {
       ctx.proId = pickFreePro(slot.date, ctx.time, ctx.proOptions);
       ctx.pickPro = true;
     }
-    setDraft({ colId, time: ctx.time, dur: gradeSlotAt(ctx.proId, slot.date, ctx.time) || 30 });
-    // painel lateral aberto → o grid vira um seletor: o clique preenche data/hora/profissional
+    // painel lateral aberto → o grid vira um seletor: o clique preenche data/hora/profissional.
+    // O rascunho não é tocado aqui: com o painel aberto o formulário é a fonte do placeholder
+    // (sobrescrevê-lo apagaria tipo/procedimentos quando o clique repete o horário atual).
     if (booking) { setSlotPick(s => ({ ...ctx, seq: (s ? s.seq : 0) + 1 })); return; }
+    // horário já ocupado pelo profissional escolhido → o que está sendo criado é um encaixe.
+    // Só vale na ABERTURA e só em coluna de profissional (equipamento/sala fora do escopo).
+    ctx.fitIn = !slot.equip && !slot.room && busyAt(ctx.proId, slot.date, ctx.time);
+    setDraft({ colId, time: ctx.time, dur: gradeSlotAt(ctx.proId, slot.date, ctx.time) || 30 });
     if (BOOKING_FLOW === 'two-tier') setQuick({ ctx, rect });
     else openBooking(ctx);
   }
@@ -180,7 +192,7 @@ function App() {
     const na = commitNew(payload);
     setQuick(null); setDraft(null);
     const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
-    flash(`Agendamento criado · ${pt.name} ${na.start}`);
+    flash(`${na.fitIn ? 'Encaixe' : 'Agendamento'} criado · ${pt.name} ${na.start}`);
   }
 
   function onBookingSave({ form, checkin, fitIn }) {
@@ -188,7 +200,7 @@ function App() {
     const na = commitNew({ patient, procIds: form.procIds, time: form.time, proId: form.proId, date: form.date, equip: form.equip || null, room: form.local, form: { ...form, _checkin: checkin }, fitIn });
     closeBooking();
     const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
-    flash(checkin ? `Agendado e check-in feito · ${pt.name}` : `Agendamento salvo · ${pt.name} ${na.start}`);
+    flash(checkin ? `Agendado e check-in feito · ${pt.name}` : `${na.fitIn ? 'Encaixe' : 'Agendamento'} salvo · ${pt.name} ${na.start}`);
   }
 
   // ---- bloqueios (formulário vive no painel lateral) -------------------------
@@ -258,7 +270,7 @@ function App() {
     setReschedule(null);
     flash(`Remarcado para ${fmtMin(min)}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? prev : x)); setToast(null); } } });
   }
-  function openEdit(a) { setCtxCard(null); openBooking({ editing: true, appt: a, date: a.date, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: (patientById(a.pt) || {}).name, isNew: false } }); }
+  function openEdit(a) { setCtxCard(null); openBooking({ editing: true, appt: a, date: a.date, time: a.start, proId: a.pro, fitIn: !!a.fitIn, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: (patientById(a.pt) || {}).name, isNew: false } }); }
 
   // ---- drag reschedule -----------------------------------------------------
   const [drag, setDrag] = React.useState({ appt: null, colId: null, min: null });
