@@ -64,7 +64,9 @@ function CancelModal({ a, onClose, onConfirm }) {
   );
 }
 
-function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
+// Formulário de bloqueio — corpo rolável + rodapé fixo, renderizado dentro do
+// painel lateral de criação/edição (BookingHost). Substitui o antigo BlockModal.
+function BlockForm({ ctx, block, appts, slotPick, active, onDraft, onDirty, onCancel, onConfirm, onDelete }) {
   const editing = !!block;
   const perms = block ? blockEditable(block) : { edit: true, del: false };
   const readOnly = editing && !perms.edit;
@@ -92,6 +94,31 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
   const isRange = date !== dateEnd;
   const sd = allDay ? '00:00' : start, ed = allDay ? '23:59' : end;
 
+  // "preenchido pelo usuário" para o X pedir confirmação — horários e recursos ficam de fora,
+  // são o que o clique no grid altera sozinho
+  const dirty = titulo.trim() !== (block ? (block.titulo || '') : '')
+    || descricao.trim() !== (block ? (block.descricao || '') : '')
+    || dias.length !== ((block && block.diasSemana) || []).length
+    || clinica !== (block ? block.scope === 'clinica' : false);
+  React.useEffect(() => { onDirty && onDirty(dirty); }, [dirty]);
+
+  // clique num horário vago do grid com o painel aberto → atualiza data/horário
+  React.useEffect(() => {
+    if (!slotPick || readOnly) return;
+    const dur = Math.max(30, toMin(end) - toMin(start));
+    setDate(slotPick.date); if (dateEnd < slotPick.date) setDateEnd(slotPick.date);
+    if (slotPick.time) { setStart(slotPick.time); setEnd(fmtMin(toMin(slotPick.time) + dur)); }
+  }, [slotPick && slotPick.seq]);
+
+  // pré-visualização ao vivo no grid: o placeholder acompanha o formulário
+  React.useEffect(() => {
+    if (!onDraft || active === false) return;
+    onDraft({
+      kind: 'bloqueio', date, time: sd, dur: Math.max(15, toMin(ed) - toMin(sd)),
+      titulo, allDay, proId: proIds[0] || (ctx && ctx.proId) || null,
+    });
+  }, [date, start, end, allDay, titulo, resources, active]);
+
   // agendamentos dentro da janela do bloqueio (aviso, não exclui)
   const affected = React.useMemo(() => {
     if (!appts) return [];
@@ -113,7 +140,7 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
     return e;
   }
   function submit() {
-    if (readOnly) { onClose(); return; }
+    if (readOnly) { onCancel(); return; }
     const e = validate(); if (Object.keys(e).length) { setErrors(e); return; }
     if (perms.confirm && !confirmFeriado) { setConfirmFeriado(true); return; }
     onConfirm({
@@ -131,26 +158,26 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
   const toggleUnit = u => setUnits(s => s.includes(u) ? s.filter(x => x !== u) : [...s, u]);
 
   const footer = readOnly
-    ? <><span style={{ flex: 1 }} /><WButton variant="default" label="Fechar" onClick={onClose} /></>
+    ? <><span style={{ flex: 1 }} /><WButton variant="default" label="Fechar" onClick={onCancel} /></>
     : <>
         {editing && perms.del && <WButton variant="default" leadingIcon="trash-2" label="Excluir" onClick={() => onDelete(block)} style={{ color: WT.danger }} />}
         <span style={{ flex: 1 }} />
-        <WButton variant="default" label="Cancelar" onClick={onClose} />
+        <WButton variant="default" label="Cancelar" onClick={onCancel} />
         <WButton variant="primary" label={editing ? (perms.confirm && confirmFeriado ? 'Confirmar edição' : 'Salvar') : 'Bloquear'} onClick={submit} />
       </>;
 
   return (
-    <CenterModal title={editing ? 'Bloqueio' : 'Novo bloqueio'} icon="ban" iconTone="danger" width={520} onClose={onClose} footer={footer}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 16px 28px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {perms.note && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: WT.rM, background: readOnly ? WT.inset : WT.warningSoft, border: `1px solid ${readOnly ? WT.border : '#e8d27a'}`, fontSize: 12, color: readOnly ? WT.fg2 : WT.warning }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: WT.rM, background: readOnly ? WT.inset : WT.warningSoft, border: `1px solid ${readOnly ? WT.border : '#e8d27a'}`, fontSize: 12, color: readOnly ? WT.fg2 : WT.warning, marginBottom: 8 }}>
             <WIcon name={readOnly ? 'lock' : 'info'} size={14} color={readOnly ? WT.muted : WT.warning} />{perms.note}
           </div>
         )}
 
         {/* Recursos do bloqueio (profissionais + equipamentos juntos) */}
+        <FHead>Aplica-se a</FHead>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
-          <WLabel required>Aplica-se a</WLabel>
           <WToggle checked={clinica} onChange={setClinica} label="Clínica inteira (todas as agendas)" />
           {!clinica && !readOnly && (
             <div style={{ border: `1px solid ${WT.border}`, borderRadius: WT.rM, overflow: 'hidden' }}>
@@ -163,54 +190,57 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
           {errors.resources && <span style={{ fontSize: 12, color: WT.danger }}>{errors.resources}</span>}
         </div>
 
-        {/* Datas */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
-          <WInput label="Data início" type="date" value={date} onChange={v => { setDate(v); if (dateEnd < v) setDateEnd(v); }} />
-          <WInput label="Data fim" type="date" value={dateEnd} onChange={setDateEnd} error={errors.data} />
-        </div>
-
-        {/* Horário + dia inteiro */}
-        <div style={{ opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <WLabel>Horário</WLabel>
+        <FDivider />
+        <FHead>Período</FHead>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
+          <FRow icon="calendar">
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 8 }}>
+              <WInput type="date" value={date} onChange={v => { setDate(v); if (dateEnd < v) setDateEnd(v); }} />
+              <WInput type="date" value={dateEnd} onChange={setDateEnd} error={errors.data} />
+            </div>
+          </FRow>
+          <FRow icon="clock" top={5}>
             <WToggle checked={allDay} onChange={setAllDay} label="Dia inteiro" />
-          </div>
-          {!allDay && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <WInput label="Início" value={start} onChange={setStart} suffixIcon="clock" />
-              <WInput label="Fim" value={end} onChange={setEnd} suffixIcon="clock" error={errors.hora} />
-            </div>
+            {!allDay && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 8 }}>
+                <WInput value={start} onChange={setStart} placeholder="Início" suffixIcon="clock" />
+                <WInput value={end} onChange={setEnd} placeholder="Fim" suffixIcon="clock" error={errors.hora} />
+              </div>
+            )}
+            {errors.hora && allDay && <span style={{ fontSize: 12, color: WT.danger }}>{errors.hora}</span>}
+          </FRow>
+          {/* Recorrência por dia da semana (dentro do período De–Até) */}
+          {!readOnly && (
+            <FRow icon="repeat" top={5}>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {DOW_ABBR.map((d, i) => <button key={i} onClick={() => toggleDay(i)} style={{ flex: 1, minWidth: 34, height: 32, borderRadius: WT.rM, cursor: 'pointer', fontFamily: WT.font, fontSize: 12, fontWeight: WT.wEmph, textTransform: 'capitalize', border: `1.5px solid ${dias.includes(i) ? WT.borderAccent : WT.border}`, background: dias.includes(i) ? WT.accentSoft : '#fff', color: dias.includes(i) ? WT.accent : WT.fg2 }}>{d}</button>)}
+              </div>
+              {recurOn && !isRange && <span style={{ fontSize: 12, color: WT.warning, display: 'flex', alignItems: 'center', gap: 5 }}><WIcon name="info" size={12} color={WT.warning} />Defina a data fim para repetir ao longo das semanas.</span>}
+              {recurOn && <button onClick={() => setDias([])} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: WT.muted, fontSize: 12, cursor: 'pointer', fontFamily: WT.font, padding: 0 }}>Limpar recorrência</button>}
+            </FRow>
           )}
-          {errors.hora && allDay && <span style={{ fontSize: 12, color: WT.danger }}>{errors.hora}</span>}
         </div>
 
-        {/* Recorrência por dia da semana (dentro do período De–Até) */}
-        {!readOnly && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <WLabel>Recorrência <span style={{ fontWeight: WT.wBody, color: WT.muted }}>· dias da semana, dentro do período</span></WLabel>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {DOW_ABBR.map((d, i) => <button key={i} onClick={() => toggleDay(i)} style={{ width: 40, height: 32, borderRadius: WT.rM, cursor: 'pointer', fontFamily: WT.font, fontSize: 12, fontWeight: WT.wEmph, textTransform: 'capitalize', border: `1.5px solid ${dias.includes(i) ? WT.borderAccent : WT.border}`, background: dias.includes(i) ? WT.accentSoft : '#fff', color: dias.includes(i) ? WT.accent : WT.fg2 }}>{d}</button>)}
-            </div>
-            {recurOn && !isRange && <span style={{ fontSize: 12, color: WT.warning, display: 'flex', alignItems: 'center', gap: 5 }}><WIcon name="info" size={12} color={WT.warning} />Defina a data fim para repetir ao longo das semanas.</span>}
-            {recurOn && <button onClick={() => setDias([])} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: WT.muted, fontSize: 12, cursor: 'pointer', fontFamily: WT.font, padding: 0 }}>Limpar recorrência</button>}
-          </div>
-        )}
-
-        {/* Unidades */}
+        <FDivider />
+        <FHead>Unidades</FHead>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, opacity: readOnly ? 0.6 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
-          <WLabel required>Unidades</WLabel>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {UNITS.map(u => <WChip key={u} on={units.includes(u)} label={u} icon="building-2" onClick={() => toggleUnit(u)} />)}
           </div>
           {errors.units && <span style={{ fontSize: 12, color: WT.danger }}>{errors.units}</span>}
         </div>
 
-        {/* Motivo / descrição */}
+        <FDivider />
+        <FHead>Motivo e observações</FHead>
         {readOnly
           ? <div style={{ fontSize: 14, color: WT.fg }}><strong style={{ fontWeight: WT.wEmph }}>{titulo}</strong>{descricao ? ` — ${descricao}` : ''}</div>
           : <>
-              <WInput label="Motivo / título" value={titulo} onChange={setTitulo} placeholder="Ex.: Almoço, reunião, cirurgia, férias" />
-              <WTextarea label="Observação (opcional)" value={descricao} onChange={setDescricao} rows={2} />
+              <FRow icon="text">
+                <WInput value={titulo} onChange={setTitulo} placeholder="Motivo — ex.: almoço, reunião, férias" />
+              </FRow>
+              <FRow>
+                <WTextarea value={descricao} onChange={setDescricao} placeholder="Observação (opcional)" rows={3} />
+              </FRow>
             </>}
 
         {/* Aviso de agendamentos na janela */}
@@ -226,7 +256,10 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
           </div>
         )}
       </div>
-    </CenterModal>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: 14, borderTop: `1px solid ${WT.border}`, background: WT.raised }}>
+        {footer}
+      </div>
+    </div>
   );
 }
 
@@ -340,4 +373,4 @@ function BlockChooser({ blocks, onClose, onPick }) {
   );
 }
 
-Object.assign(window, { CenterModal, CancelModal, BlockModal, BlockChooser, WChip, RescheduleModal, WaitingPanel, CANCEL_REASONS });
+Object.assign(window, { CenterModal, CancelModal, BlockForm, BlockChooser, WChip, RescheduleModal, WaitingPanel, CANCEL_REASONS });

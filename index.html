@@ -25,6 +25,34 @@
   @keyframes sheetUp { from { transform: translateY(40px); } to { transform: translateY(0); } }
   @keyframes modalIn { from { transform: scale(.97); opacity: .4; } to { transform: scale(1); opacity: 1; } }
   [data-lucide] { display: inline-flex; }
+
+  /* Barra da agenda: container query na própria barra, porque quem a estreita é o
+     sidebar e o painel de agendamento, não o viewport. Os dois seletores de visão
+     existem no DOM e o CSS escolhe qual aparece — nada mede, nada pisca.
+     Os limiares saem da largura natural do conteúdo: com 6 visões o segmented
+     mede ~610px, com 2 (edição MVP) ~175px, daí os dois pontos de troca. */
+  .ag-bar { container-type: inline-size; }
+  .ag-bar .ag-views-sel, .ag-bar .ag-zoom-menu, .ag-bar .ag-date-short { display: none; }
+  .ag-bar .ag-views-seg { display: inline-flex; }
+  .ag-bar .ag-zoom-bar { display: inline-flex; }
+  @container (max-width: 1215px) {
+    .ag-bar[data-views="6"] .ag-views-seg { display: none; }
+    .ag-bar[data-views="6"] .ag-views-sel { display: flex; }
+    .ag-bar[data-views="6"] .ag-date-long { display: none; }
+    .ag-bar[data-views="6"] .ag-date-short { display: inline; }
+  }
+  @container (max-width: 790px) {
+    .ag-bar[data-views="2"] .ag-views-seg { display: none; }
+    .ag-bar[data-views="2"] .ag-views-sel { display: flex; }
+    .ag-bar[data-views="2"] .ag-date-long { display: none; }
+    .ag-bar[data-views="2"] .ag-date-short { display: inline; }
+  }
+  /* mais apertado ainda: o zoom é refino, cede a vez e vai para "Configurações de
+     visualização" — o menu é descendente da barra, então herda o mesmo container */
+  @container (max-width: 640px) {
+    .ag-bar .ag-zoom-bar { display: none; }
+    .ag-bar .ag-zoom-menu { display: flex; }
+  }
   @media print {
     body * { visibility: hidden !important; }
     [data-print-area], [data-print-area] * { visibility: visible !important; }

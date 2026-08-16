@@ -140,29 +140,17 @@ function groupOverlapBlocks(blocks) {
 }
 // cabeçalho da faixa de grade — aba sólida na cor da grade, ancorada acima do 1º slot
 function GradeBandHeader({ g, HEADER_H }) {
-  const ref = React.useRef(null);
-  const [wide, setWide] = React.useState(false);
-  React.useLayoutEffect(() => {
-    const el = ref.current; if (!el) return;
-    const check = () => setWide(el.clientWidth >= 260);
-    check();
-    let ro; if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(check); ro.observe(el); }
-    return () => ro && ro.disconnect();
-  }, []);
   const name = g.label ? `${g.label}${g.room ? ' · ' + roomShort(g.room) : ''}` : (g.room ? `${g.room} · Unidade Centro` : 'Unidade Centro');
+  const doctoTitle = g.doctoralia ? ' · disponível em Doctoralia' : '';
   return (
-    <div ref={ref} style={{ position: 'absolute', top: -HEADER_H, left: 0, right: 0, height: HEADER_H, display: 'flex', alignItems: 'flex-end', gap: 4, zIndex: 2, pointerEvents: 'none' }}>
-      <span title={`Grade: ${name} · ${g.start}–${g.end}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: g.doctoralia ? '72%' : '100%', height: HEADER_H, padding: '0 8px', background: g.color, borderRadius: `${WT.rS} ${WT.rS} 0 0`, pointerEvents: 'auto' }}>
-        <WIcon name="calendar-check" size={11} color="#fff" style={{ flex: 'none', opacity: 0.9 }} />
+    <div style={{ position: 'absolute', top: -HEADER_H, left: 0, right: 0, height: HEADER_H, display: 'flex', alignItems: 'flex-end', gap: 4, zIndex: 2, pointerEvents: 'none' }}>
+      <span title={`Grade: ${name} · ${g.start}–${g.end}${doctoTitle}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', height: HEADER_H, padding: '0 8px', background: g.color, borderRadius: `${WT.rS} ${WT.rS} 0 0`, pointerEvents: 'auto' }}>
         <span style={{ fontSize: 11.5, fontWeight: WT.wXbold, color: '#fff', letterSpacing: '.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+        {/* selo da Doctoralia no fim do próprio rótulo da grade — a faixa já diz
+            de qual disponibilidade se trata, não precisa repetir isso em texto */}
+        {/* só existe o PNG colorido — o filtro o achata em branco sobre a faixa */}
+        {g.doctoralia && <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" style={{ width: 14, height: 14, flex: 'none', display: 'block', filter: 'brightness(0) invert(1)' }} />}
       </span>
-      <span style={{ flex: 1 }} />
-      {g.doctoralia && (
-        <span title="Disponível em Doctoralia" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', height: HEADER_H, cursor: 'help', pointerEvents: 'auto', paddingRight: 4 }}>
-          {wide && <span style={{ fontSize: 11, fontWeight: WT.wXbold, color: '#00847e', whiteSpace: 'nowrap' }}>Disponível em Doctoralia</span>}
-          <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" style={{ width: 15, height: 15, display: 'block' }} />
-        </span>
-      )}
     </div>
   );
 }
@@ -271,13 +259,41 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
         </div>
       )}
 
-      {/* draft placeholder — agendamento em criação (estilo Google) */}
+      {/* draft placeholder — pré-visualização ao vivo do formulário, com cara de card/bloqueio */}
       {draft && draft.colId === colId && (() => {
-        const dm = toMin(draft.time); const dh = (draft.dur || slotMin) * pxPerMin;
+        const dm = toMin(draft.time); const dur = draft.dur || slotMin;
+        const top = (dm - startMin) * pxPerMin;
+        const dh = Math.max(dur * pxPerMin - 2, 18);
+        const shadow = '0 12px 32px #25282845, 0 3px 10px #25282826';
+        if (draft.kind === 'bloqueio') {
+          const tall = dh > 34;
+          return (
+            <div style={{ position: 'absolute', left: 2, right: 2, top, height: dh, zIndex: 8, borderRadius: WT.rS, border: `1px solid ${WT.border}`, background: 'repeating-linear-gradient(135deg,#fafbfb,#fafbfb 7px,#f0f2f2 7px,#f0f2f2 14px)', boxShadow: shadow, display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: tall ? 1 : 6, padding: tall ? '4px 8px' : '0 8px', overflow: 'hidden', pointerEvents: 'none' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, maxWidth: '100%' }}>
+                <WIcon name="lock" size={11} color={WT.fg2} style={{ flex: 'none' }} />
+                <span style={{ fontSize: 11.5, fontWeight: WT.wEmph, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{draft.titulo || 'Bloqueio'}</span>
+              </span>
+              <span style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{draft.allDay ? 'Dia inteiro' : `${draft.time}–${fmtMin(dm + dur)}`}</span>
+            </div>
+          );
+        }
+        // aparência de card de agendamento (paleta do 1º procedimento, sombra grande)
+        const procId = draft.procIds && draft.procIds[0];
+        const t = procId ? apptColors({ proc: procId, procs: draft.procIds }) : null;
+        const svc = t ? t.bar : WT.accentFill;
+        const strong = t ? t.fg : WT.accent;
+        const soft = t ? `color-mix(in srgb, ${t.fg} 90%, #fff)` : WT.accent;
+        const tiny = dh < 34;
+        const procName = procId ? `${(PROCS[procId] || {}).name}${draft.procIds.length > 1 ? ` +${draft.procIds.length - 1}` : ''}` : null;
         return (
-          <div style={{ position: 'absolute', left: 2, right: 2, top: (dm - startMin) * pxPerMin, height: Math.max(dh - 2, 18), zIndex: 8, borderRadius: WT.rM, background: WT.accentSoft, border: `1.5px dashed ${WT.borderAccent}`, boxShadow: '0 1px 4px #006a5926', display: 'flex', flexDirection: dh > 34 ? 'column' : 'row', alignItems: dh > 34 ? 'flex-start' : 'center', gap: dh > 34 ? 1 : 6, padding: dh > 34 ? '5px 9px' : '0 9px', overflow: 'hidden', pointerEvents: 'none' }}>
-            <span style={{ fontSize: 12, fontWeight: WT.wHead, color: WT.accent, whiteSpace: 'nowrap' }}>Novo agendamento</span>
-            <span style={{ fontSize: 11, color: WT.accent, opacity: 0.85, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{draft.time}–{fmtMin(dm + (draft.dur || slotMin))} · {draft.dur || slotMin} min</span>
+          <div style={{ position: 'absolute', top, height: dh, zIndex: 8, left: `calc((100% - ${GUTTER}px) * 0 + 7px)`, width: `calc((100% - ${GUTTER}px) * 1 - 9px)`, borderRadius: WT.rM, background: `color-mix(in srgb, ${svc} 20%, #fff)`, border: `1px solid color-mix(in srgb, ${svc} 42%, #fff)`, outline: draft.kind === 'encaixe' ? `1.5px dashed ${WT.warning}` : 'none', outlineOffset: -2, boxShadow: shadow, display: 'flex', flexDirection: tiny ? 'row' : 'column', alignItems: tiny ? 'center' : 'stretch', gap: tiny ? 5 : 3, padding: tiny ? '0 9px' : '5px 9px', overflow: 'hidden', pointerEvents: 'none', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+              <span style={{ fontSize: tiny ? 11 : 12.5, fontWeight: WT.wHead, color: strong, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{draft.patientName || (draft.kind === 'encaixe' ? 'Novo encaixe' : 'Novo agendamento')}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ fontSize: 11, color: soft, fontWeight: WT.wEmph, whiteSpace: 'nowrap', flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{draft.time} – {fmtMin(dm + dur)}</span>
+              {procName && !tiny && <span style={{ fontSize: 11, color: soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{procName}</span>}
+            </div>
           </div>
         );
       })()}
@@ -325,6 +341,9 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft, drag, colMinWidth = 200, headerRender }) {
   const gutterW = 56;
   const colW = Math.round(colMinWidth * Math.max(0.7, Math.min(1.2, zoom)));
+  // largura tem dois pontos: conforto (colW, alvo com espaço de sobra) e piso (80% dele) —
+  // as colunas comprimem até o piso antes de acionar o scroll horizontal
+  const colFloorW = Math.round(colW * 0.8);
   const scroller = React.useRef(null);
   const [expanded, setExpanded] = React.useState(false);
   // recorte automático: o dia começa no primeiro horário com conteúdo (grade/agendamento),
@@ -339,13 +358,27 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   const trimStart = expanded ? startMin : trimFull;
   const scrollKey = columns.map(c => c.id + (c.date || '')).join('|');
   React.useEffect(() => { setExpanded(false); if (scroller.current) scroller.current.scrollTop = 0; }, [scrollKey]);
+  // coluna do rascunho parcialmente visível → desliza para dentro da área visível.
+  // Só mexe no eixo horizontal, então convive com o reset de scrollTop acima.
+  const draftCol = draft && draft.colId;
+  React.useEffect(() => {
+    const sc = scroller.current;
+    if (!sc || !draftCol || sc.scrollWidth <= sc.clientWidth) return; // sem scroll horizontal → nada a fazer
+    const el = sc.querySelector(`[data-col-id="${draftCol}"]`);
+    if (!el) return; // coluna fora do conjunto atual (ex.: sentinela '__outra-data')
+    const MARGIN = 24; // folga visível entre a coluna e a borda do scroll
+    const sr = sc.getBoundingClientRect(), cr = el.getBoundingClientRect();
+    const delta = cr.left < sr.left + MARGIN ? cr.left - (sr.left + MARGIN)
+      : cr.right > sr.right - MARGIN ? cr.right - (sr.right - MARGIN) : 0;
+    if (delta) sc.scrollBy({ left: delta, behavior: 'smooth' });
+  }, [draftCol, scrollKey, colW]);
   const hours = []; for (let h = trimStart; h <= endMin; h += 60) hours.push(h);
   return (
     <div ref={scroller} style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
-      <div style={{ minWidth: gutterW + columns.length * colW, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ minWidth: gutterW + columns.length * colFloorW, display: 'flex', flexDirection: 'column' }}>
         {/* sticky header */}
         <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', background: WT.raised, borderBottom: `1px solid ${WT.border}` }}>
-          <div style={{ width: gutterW, flex: 'none', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
+          <div style={{ width: gutterW, flex: 'none', position: 'sticky', left: 0, zIndex: 1, background: WT.raised, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
             {(expanded || firstContent != null) && trimFull > startMin && (
               <button onClick={() => setExpanded(v => !v)} title={expanded ? `Ocultar horários vazios (${fmtMin(startMin)}–${fmtMin(trimFull)})` : `Mostrar horários anteriores (${fmtMin(startMin)}–${fmtMin(trimFull)})`}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 3, height: 20, padding: '0 6px', borderRadius: WT.pill, border: `1px solid ${WT.border}`, background: '#fff', color: WT.muted, fontFamily: WT.font, fontSize: 10.5, cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
@@ -355,7 +388,7 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
             )}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
+            <div key={c.id} style={{ flex: 1, minWidth: colFloorW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
               {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} subParts={c.subParts} occupancy={c.occupancy} />}
             </div>
           ))}
@@ -363,13 +396,14 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
         {/* body — 24px reservados no topo para as abas de nome de grade (ancoradas acima do 1º slot) */}
         <div style={{ display: 'flex', paddingTop: 24 }}>
           {/* time gutter */}
-          <div style={{ width: gutterW, flex: 'none', position: 'relative', height: (endMin - trimStart) * pxPerMin }}>
+          {/* sticky no eixo horizontal: as horas nunca saem da vista quando o grid rola de lado */}
+          <div style={{ width: gutterW, flex: 'none', position: 'sticky', left: 0, zIndex: 9, background: WT.raised, height: (endMin - trimStart) * pxPerMin }}>
             {hours.map(h => (
               <div key={h} style={{ position: 'absolute', top: (h - trimStart) * pxPerMin - 7, right: 8, fontSize: 11, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>{fmtMin(h)}</div>
             ))}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
+            <div key={c.id} data-col-id={c.id} style={{ flex: 1, minWidth: colFloorW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
               <ColumnTrack colId={c.id} appts={c.appts} blocks={c.blocks} startMin={trimStart} endMin={endMin}
                 slotMin={slotMin} pxPerMin={pxPerMin} cardStyle={cardStyle} freeOnly={freeOnly} bookable={c.bookable !== false} showPro={c.showPro != null ? c.showPro : showPro} grades={c.grades} coverage={c.coverage}
                 onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} isToday={c.date === dateForToday} />

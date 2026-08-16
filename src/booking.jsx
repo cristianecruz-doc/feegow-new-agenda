@@ -20,7 +20,7 @@ function ProcMultiSelect({ value, onChange, options, error, label, required, hin
   const matches = (q ? avail.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || (TYPES[p.type] || {}).label.toLowerCase().includes(q.toLowerCase())) : avail).slice(0, 8);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <WLabel required={required}>{label}{hint ? <span style={{ fontWeight: WT.wBody, color: WT.muted }}> · {hint}</span> : null}</WLabel>
+      {label && <WLabel required={required}>{label}{hint ? <span style={{ fontWeight: WT.wBody, color: WT.muted }}> · {hint}</span> : null}</WLabel>}
       {sel.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {sel.map(id => { const p = PROCS[id]; if (!p) return null; const tc = TYPES[p.type]; return (
@@ -34,8 +34,8 @@ function ProcMultiSelect({ value, onChange, options, error, label, required, hin
       )}
       {avail.length > 0 && (
         <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 44, padding: '0 10px', borderRadius: WT.rM, border: `1px solid ${error ? WT.borderDanger : WT.border}`, background: '#fff' }}>
-            <WIcon name="search" size={16} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: WT.rM, border: `1px solid ${error ? WT.borderDanger : WT.border}`, background: '#fff' }}>
+            <WIcon name="search" size={15} />
             <input value={q} placeholder={sel.length ? 'Buscar e adicionar procedimento…' : 'Digite para buscar o procedimento…'}
               onChange={e => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 140)}
               style={{ border: 'none', outline: 'none', font: `${WT.wBody} 14px ${WT.font}`, flex: 1, background: 'transparent', color: WT.fg, minWidth: 0 }} />
@@ -68,7 +68,7 @@ function ProcMultiSelect({ value, onChange, options, error, label, required, hin
 }
 
 // ---- Patient autocomplete ---------------------------------------------------
-function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
+function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus, noLabel }) {
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
   const sel = value ? (patientById(value.patientId) || { name: value.patientName }) : null;
@@ -76,9 +76,9 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
   if (sel && !open) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        <WLabel required>Paciente</WLabel>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '6px 8px 6px 10px', borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff' }}>
-          <WAvatar initials={(sel.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('')} size={28} />
+        {!noLabel && <WLabel required>Paciente</WLabel>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40, padding: '4px 6px 4px 8px', borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#fff' }}>
+          <WAvatar initials={(sel.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('')} size={24} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 14, fontWeight: WT.wEmph, color: WT.fg }}>{sel.name}</span>
@@ -95,9 +95,9 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, position: 'relative' }}>
-      <WLabel required>Paciente</WLabel>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 44, padding: '0 10px', borderRadius: WT.rM, border: `1px solid ${error ? WT.borderDanger : WT.border}`, background: '#fff' }}>
-        <WIcon name="search" size={16} />
+      {!noLabel && <WLabel required>Paciente</WLabel>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: noLabel ? 32 : 44, padding: '0 10px', borderRadius: WT.rM, border: `1px solid ${error ? WT.borderDanger : WT.border}`, background: '#fff' }}>
+        <WIcon name="search" size={15} />
         <input autoFocus={autoFocus} value={q} placeholder="Buscar paciente…"
           onChange={e => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
           style={{ border: 'none', outline: 'none', font: `${WT.wBody} 14px ${WT.font}`, flex: 1, background: 'transparent', color: WT.fg, minWidth: 0 }} />
@@ -129,6 +129,8 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
 
 // ---- Quick-create popover (Tier 1) ------------------------------------------
 function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft }) {
+  // tipo definido na abertura pelo horário clicado (ocupado → encaixe) e daí em diante do usuário
+  const [kind, setKind] = React.useState(ctx.fitIn ? 'encaixe' : 'agendamento');
   const [proId, setProId] = React.useState(ctx.proId);
   const pro = PROS.find(p => p.id === proId) || PROS[0];
   const proOptions = ctx.proOptions && ctx.proOptions.length ? ctx.proOptions : PROS.map(p => p.id);
@@ -163,7 +165,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
   // clear incompatible procedures when the grade changes
   React.useEffect(() => { if (grade && grade.procs) setProcIds(ids => ids.filter(id => grade.procs.includes(id))); }, [time]);
   // mantém o placeholder no grid sincronizado com horário + duração em criação
-  React.useEffect(() => { onDraft && onDraft({ time, dur: totalDur || gradeSlotAt(proId, ctx.date, time) || 30 }); }, [time, totalDur]);
+  React.useEffect(() => { onDraft && onDraft({ time, dur: totalDur || gradeSlotAt(proId, ctx.date, time) || 30, kind }); }, [time, totalDur, kind, proId]);
   const save = () => {
     const e = {};
     if (!patient) e.patient = 'Selecione um paciente';
@@ -174,15 +176,18 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
     if (cardExpired && requireValidCard) e.conv = `Carteirinha vencida em ${ptRec.cardExp} — atualize o cadastro para agendar por convênio`;
     if (needPrepay && !prepaid) e.prepay = 'Confirme o pagamento antecipado para agendar';
     if (Object.keys(e).length) { setErr(e); return; }
-    onSave({ ...ctx, proId, patient, procIds, time, payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular' });
+    onSave({ ...ctx, proId, patient, procIds, time, fitIn: kind === 'encaixe', payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular' });
   };
   return (
     <WPopover anchorRect={anchorRect} onClose={onClose} width={340}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 8px 10px 14px', borderBottom: `1px solid ${WT.borderSub}`, flex: 'none' }}>
-        <span style={{ flex: 1, fontSize: 15, fontWeight: WT.wHead, color: WT.fg }}>Novo agendamento</span>
+        <span style={{ flex: 1, fontSize: 15, fontWeight: WT.wHead, color: WT.fg }}>{kind === 'encaixe' ? 'Novo encaixe' : 'Novo agendamento'}</span>
         <WIconButton name="x" dim={28} onClick={onClose} />
       </div>
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {/* Bloqueio não cabe aqui (formulário próprio) — fica em "Mais opções" */}
+        <WSegmented fullWidth value={kind} onChange={setKind}
+          options={[{ value: 'agendamento', label: 'Agendamento' }, { value: 'encaixe', label: 'Encaixe' }]} />
         {ctx.pickPro ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ flex: 1 }}>
@@ -238,7 +243,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}`, background: WT.inset, flex: 'none' }}>
-        <WButton variant="plain" leadingIcon="settings-2" label="Mais opções" onClick={() => onMore({ ...ctx, patient, procIds, time })} />
+        <WButton variant="plain" leadingIcon="settings-2" label="Mais opções" onClick={() => onMore({ ...ctx, proId, patient, procIds, time, fitIn: kind === 'encaixe' })} />
         <span style={{ flex: 1 }} />
         <WButton variant="primary" leadingIcon="check" label="Salvar" onClick={save} />
       </div>
@@ -247,15 +252,17 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
 }
 
 // ---- Configurable patient field -------------------------------------------
-function PatientField({ name, value, onChange, required, error }) {
+// noLabel: estilo do painel lateral (Figma) — o nome do campo vira placeholder
+function PatientField({ name, value, onChange, required, error, noLabel, size = 'l' }) {
   const label = PATIENT_FIELDS[name] || name;
-  if (name === 'Nascimento') return <WInput label={label} required={required} type="date" value={value || ''} onChange={onChange} error={error} size="l" />;
-  if (name === 'Sexo') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={SEXO_OPTS} error={error} size="l" />;
-  if (name === 'Origem') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={ORIGEM_OPTS} error={error} size="l" />;
-  if (name === 'Tabela') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={TABELA_OPTS} error={error} size="l" />;
-  if (name === 'IndicadoPorSelecao') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={PROS.map(p => p.name)} error={error} size="l" />;
+  const lbl = noLabel ? undefined : label;
+  if (name === 'Nascimento') return <WInput label={lbl} required={required} type="date" value={value || ''} onChange={onChange} error={error} size={size} />;
+  if (name === 'Sexo') return <WSelect label={lbl} placeholder={noLabel ? label : undefined} required={required} value={value || ''} onChange={onChange} options={SEXO_OPTS} error={error} size={size} />;
+  if (name === 'Origem') return <WSelect label={lbl} placeholder={noLabel ? label : undefined} required={required} value={value || ''} onChange={onChange} options={ORIGEM_OPTS} error={error} size={size} />;
+  if (name === 'Tabela') return <WSelect label={lbl} placeholder={noLabel ? label : undefined} required={required} value={value || ''} onChange={onChange} options={TABELA_OPTS} error={error} size={size} />;
+  if (name === 'IndicadoPorSelecao') return <WSelect label={lbl} placeholder={noLabel ? label : undefined} required={required} value={value || ''} onChange={onChange} options={PROS.map(p => p.name)} error={error} size={size} />;
   const ph = name === 'Email1' ? 'nome@email.com' : name === 'CPF' ? '000.000.000-00' : (name === 'Cel1' || name === 'Tel1') ? '(11) 90000-0000' : '';
-  return <WInput label={label} required={required} value={value || ''} onChange={onChange} error={error} placeholder={ph} size="l" />;
+  return <WInput label={lbl} required={required} value={value || ''} onChange={onChange} error={error} placeholder={noLabel ? label : ph} size={size} />;
 }
 
 // stable section header (module scope so the form subtree never remounts)
@@ -317,8 +324,45 @@ function NotificationsSection({ appt }) {
   );
 }
 
+// linha do formulário: calha de ícone (20px) + 16px de vão + campo — métricas do Figma
+function FRow({ icon, top = 7, children }) {
+  return (
+    <div style={{ display: 'flex', gap: 16 }}>
+      <span style={{ width: 20, flex: 'none', display: 'flex', justifyContent: 'center', marginTop: top }}>
+        {icon && <WIcon name={icon} size={18} color={WT.muted} />}
+      </span>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</div>
+    </div>
+  );
+}
+function FHead({ children }) {
+  return <div style={{ fontSize: 14, fontWeight: WT.wHead, color: WT.fg, lineHeight: '20px', paddingBottom: 4 }}>{children}</div>;
+}
+function FDivider() {
+  return <WDivider style={{ margin: '16px 0', flex: 'none' }} />;
+}
+
 // ---- Full booking form (Tier 2) --------------------------------------------
-function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatientChange, embedded }) {
+// campos que contam como "preenchido pelo usuário" — data/hora/profissional/local ficam de
+// fora porque mudam ao arrastar o rascunho pelo grid, não por digitação
+const DIRTY_KEYS = ['patient', 'procIds', 'plano', 'convenio', 'tabela', 'valor', 'canal', 'notas', 'paciente', 'equip'];
+
+// entrada para uma sub-tela do paciente — as três dividem a largura do painel
+function DrillChip({ label, onClick }) {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button type="button" onClick={onClick}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        flex: 1, minWidth: 0, height: 28, padding: '0 8px', borderRadius: WT.rM,
+        border: `1px solid ${hover ? WT.borderHover : WT.border}`, background: hover ? WT.hover : '#fff',
+        cursor: 'pointer', fontFamily: WT.font, fontSize: 13, fontWeight: WT.wEmph,
+        color: hover ? WT.accent : WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>{label}</button>
+  );
+}
+
+function BookingForm({ init, config, perms, slotPick, contactPatch, active, onCancel, onSave, onDraft, onPatientChange, onDirty, onOpenPatient, embedded }) {
   const [form, setForm] = React.useState(() => {
     const f = {
       patient: init.patient || null, procIds: init.procIds || (init.procId ? [init.procId] : []), proId: init.proId || PROS[0].id,
@@ -332,12 +376,44 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
   const [errors, setErrors] = React.useState({});
   const upd = patch => setForm(s => ({ ...s, ...patch }));
   const updPac = (k, v) => setForm(s => ({ ...s, paciente: { ...s.paciente, [k]: v } }));
+  // fechar com o formulário mexido pede confirmação — a referência é o estado inicial,
+  // então abrir e fechar uma edição existente continua fechando direto
+  const pristine = React.useRef(null);
+  if (!pristine.current) pristine.current = form;
+  const dirty = DIRTY_KEYS.some(k => JSON.stringify(form[k]) !== JSON.stringify(pristine.current[k]));
+  React.useEffect(() => { onDirty && onDirty(dirty); }, [dirty]);
   const totalDur = form.procIds.reduce((s, id) => s + ((PROCS[id] || {}).dur || 0), 0);
-  React.useEffect(() => { onDraft && onDraft({ time: form.time, dur: totalDur || 30 }); }, [form.time, totalDur]);
+  // pré-visualização ao vivo no grid: o placeholder acompanha tudo que é digitado
+  React.useEffect(() => {
+    if (!onDraft || active === false) return;
+    const ptRec = form.patient && form.patient.patientId ? patientById(form.patient.patientId) : null;
+    onDraft({
+      // sem procedimentos a consulta dura um slot da grade naquele horário (não 30 fixos)
+      time: form.time, dur: totalDur || gradeSlotAt(form.proId, form.date, form.time) || 30, proId: form.proId, date: form.date,
+      patientName: form.patient ? ((ptRec && ptRec.name) || form.patient.patientName) : null,
+      procIds: form.procIds,
+    });
+  }, [form.time, totalDur, form.proId, form.date, form.patient, form.procIds, active]);
   React.useEffect(() => { onPatientChange && onPatientChange(form.patient); }, [form.patient]);
   const reqEquipId = form.procIds.map(id => (PROCS[id] || {}).reqEquip).find(Boolean) || null;
   const [showEquip, setShowEquip] = React.useState(!!init.equip);
   React.useEffect(() => { if (reqEquipId && form.equip !== reqEquipId) upd({ equip: reqEquipId }); }, [reqEquipId]);
+
+  // contatos salvos na Ficha do paciente voltam para os campos do agendamento
+  React.useEffect(() => {
+    if (!contactPatch) return;
+    setForm(s => ({ ...s, paciente: { ...s.paciente, Cel1: contactPatch.Cel1 || s.paciente.Cel1, Email1: contactPatch.Email1 || s.paciente.Email1 } }));
+  }, [contactPatch && contactPatch.seq]);
+
+  // clique num horário vago do grid com o painel aberto → atualiza data/horário/profissional
+  React.useEffect(() => {
+    if (!slotPick) return;
+    const patch = { date: slotPick.date, time: slotPick.time };
+    if (slotPick.proId) { patch.proId = slotPick.proId; patch.local = PROS.find(p => p.id === slotPick.proId)?.room || form.local; }
+    if (slotPick.equip) patch.equip = slotPick.equip;
+    if (slotPick.room) patch.local = slotPick.room;
+    upd(patch);
+  }, [slotPick && slotPick.seq]);
 
   // when procedures change, auto-recompute the particular value (sum of prices)
   const setProcs = ids => { const sum = ids.reduce((s, id) => s + ((PROCS[id] || {}).price || 0), 0); upd({ procIds: ids, valor: ids.length ? String(sum.toFixed(2)) : form.valor }); };
@@ -355,10 +431,13 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
 
   // prefill known data for existing patient so required fields are satisfied
   React.useEffect(() => {
-    if (form.patient && form.patient.patientId) {
-      const p = patientById(form.patient.patientId) || {};
-      setForm(s => ({ ...s, paciente: { ...s.paciente, Nascimento: s.paciente.Nascimento || p.birth, Cel1: s.paciente.Cel1 || p.phone } }));
-    }
+    if (!(form.patient && form.patient.patientId)) return;
+    const p = patientById(form.patient.patientId) || {};
+    const paciente = { ...form.paciente, Nascimento: form.paciente.Nascimento || p.birth, Cel1: form.paciente.Cel1 || p.phone };
+    // o que o sistema preenche sozinho não é "conteúdo digitado": entra também na
+    // referência, senão abrir uma edição já contaria como formulário sujo
+    pristine.current = { ...pristine.current, paciente: { ...pristine.current.paciente, Nascimento: paciente.Nascimento, Cel1: paciente.Cel1 } };
+    setForm(s => ({ ...s, paciente }));
   }, [form.patient && form.patient.patientId]);
 
   function validate() {
@@ -386,67 +465,113 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
   }
 
   const errCount = Object.keys(errors).length;
+  const hasEquipRow = showEquip || form.equip || reqEquipId;
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 16px 28px', display: 'flex', flexDirection: 'column', gap: 14, background: WT.bg }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 16px 28px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {errCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: WT.rM, background: WT.dangerSoft, border: `1px solid ${WT.borderDanger}`, color: WT.danger, fontSize: 13, fontWeight: WT.wEmph }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: WT.rM, background: WT.dangerSoft, border: `1px solid ${WT.borderDanger}`, color: WT.danger, fontSize: 13, fontWeight: WT.wEmph, marginBottom: 8 }}>
             <WIcon name="alert-triangle" size={16} color={WT.danger} />
             {errCount} campo(s) precisam de atenção — seus dados foram mantidos.
           </div>
         )}
 
-        <Section icon="user-round" title="Paciente">
-          <PatientAutocomplete value={form.patient} onSelect={p => upd({ patient: p })} onNew={name => upd({ patient: { patientName: name, isNew: true } })} error={errors.patient} />
+        <FHead>Paciente</FHead>
+        <FRow icon="user-round">
+          <PatientAutocomplete noLabel value={form.patient} onSelect={p => upd({ patient: p })} onNew={name => upd({ patient: { patientName: name, isNew: true } })} error={errors.patient} />
           {form.patient && form.patient.isNew && (
-            <div style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 6, marginTop: -4 }}><WIcon name="info" size={13} color={WT.accent} />Novo cadastro — preencha os dados exigidos pela clínica.</div>
+            <div style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 6 }}><WIcon name="info" size={13} color={WT.accent} />Novo cadastro — preencha os dados exigidos pela clínica.</div>
           )}
-          {errors._contact && <div style={{ fontSize: 12, color: WT.danger, display: 'flex', alignItems: 'center', gap: 4 }}><WIcon name="alert-circle" size={12} color={WT.danger} />{errors._contact}</div>}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {patientFieldsToRender.map(f => (
-              <PatientField key={f} name={f} value={form.paciente[f]} onChange={v => updPac(f, v)} required={requiredSet.has(f)} error={errors['pac_' + f]} />
-            ))}
-          </div>
-        </Section>
+          {/* sub-telas do paciente — empilham no próprio painel, sem sair do formulário.
+              Histórico e Conta pressupõem paciente já cadastrado (um novo não tem nem um nem outra). */}
+          {form.patient && onOpenPatient && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <DrillChip label="Ficha" onClick={() => onOpenPatient({ id: 'ficha', title: 'Ficha' })} />
+              {form.patient.patientId && <DrillChip label="Histórico" onClick={() => onOpenPatient({ id: 'historico', title: 'Histórico' })} />}
+              {form.patient.patientId && perms.verConta && <DrillChip label="Conta" onClick={() => onOpenPatient({ id: 'conta', title: 'Conta' })} />}
+            </div>
+          )}
+          {form.patient && errors._contact && <div style={{ fontSize: 12, color: WT.danger, display: 'flex', alignItems: 'center', gap: 4 }}><WIcon name="alert-circle" size={12} color={WT.danger} />{errors._contact}</div>}
+          {form.patient && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 8 }}>
+              {patientFieldsToRender.map(f => (
+                <PatientField key={f} name={f} noLabel size="m" value={form.paciente[f]} onChange={v => updPac(f, v)} required={requiredSet.has(f)} error={errors['pac_' + f]} />
+              ))}
+            </div>
+          )}
+        </FRow>
 
-        <Section icon="clipboard-list" title="Atendimento">
-          <WSelect label="Profissional" value={form.proId} onChange={v => upd({ proId: v, local: PROS.find(p => p.id === v)?.room })} options={PROS.map(p => ({ value: p.id, label: `${p.name} · ${p.spec}` }))} size="l" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <WInput label="Data" required type="date" value={form.date} onChange={v => upd({ date: v })} error={errors.date} size="l" />
-            <WInput label="Horário" required value={form.time} onChange={v => upd({ time: v })} suffixIcon="clock" error={errors.time} size="l" />
+        <FDivider />
+        <FHead>Detalhes da visita</FHead>
+        <FRow icon="contact-round">
+          <WSelect value={form.proId} onChange={v => upd({ proId: v, local: PROS.find(p => p.id === v)?.room })} options={PROS.map(p => ({ value: p.id, label: `${p.name} · ${p.spec}` }))} placeholder={null} />
+        </FRow>
+        <FRow icon="calendar">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.53fr) minmax(0,1fr)', gap: 8 }}>
+            <WInput type="date" value={form.date} onChange={v => upd({ date: v })} error={errors.date} />
+            <WInput value={form.time} onChange={v => upd({ time: v })} placeholder="Horário" suffixIcon="clock" error={errors.time} />
           </div>
-          <ProcMultiSelect label="Procedimentos" required value={form.procIds} onChange={setProcs} error={errors.procIds} options={PROC_LIST} />
+        </FRow>
+        <FRow icon="door-open">
+          <WSelect value={form.local} onChange={v => upd({ local: v })} options={ROOMS.map(r => r.name)} placeholder="Local / unidade" error={errors.local} />
+        </FRow>
+        <FRow icon="stethoscope">
+          <ProcMultiSelect value={form.procIds} onChange={setProcs} error={errors.procIds} options={PROC_LIST} />
           {form.procIds.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -2 }}><WIcon name="clock" size={13} color={WT.muted} /><span style={{ fontSize: 12, color: WT.muted }}>Duração total {totalDur} min · cor pelo 1º procedimento</span></div>}
-          <WSelect label="Local / unidade" required value={form.local} onChange={v => upd({ local: v })} options={ROOMS.map(r => r.name)} error={errors.local} size="l" />
-          {!window.__mvp && ((showEquip || form.equip || reqEquipId)
-            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <WSelect label={reqEquipId ? 'Equipamento (exigido pelo procedimento)' : 'Equipamento'} required={!!reqEquipId} value={form.equip} onChange={v => upd({ equip: v })} options={[{ value: '', label: 'Nenhum' }, ...EQUIP.map(e => ({ value: e.id, label: e.name }))]} placeholder="Vincular equipamento…" size="l" />
-                {reqEquipId
-                  ? <span style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 5 }}><WIcon name="info" size={12} color={WT.accent} />Equipamento exigido pelo procedimento selecionado.</span>
-                  : <button type="button" onClick={() => { upd({ equip: '' }); setShowEquip(false); }} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: WT.muted, fontSize: 12, cursor: 'pointer', fontFamily: WT.font, padding: 0 }}>Remover equipamento</button>}
-              </div>
-            : <button type="button" onClick={() => setShowEquip(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: WT.rM, border: `1px dashed ${WT.borderHover}`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="plus" size={15} color={WT.accent} />Adicionar equipamento</button>)}
-        </Section>
+        </FRow>
+        {!window.__mvp && (
+          <FRow icon="wrench" top={hasEquipRow ? 7 : 4}>
+            {hasEquipRow
+              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <WSelect value={form.equip} onChange={v => upd({ equip: v })} options={[{ value: '', label: 'Nenhum' }, ...EQUIP.map(e => ({ value: e.id, label: e.name }))]} placeholder="Vincular equipamento…" />
+                  {reqEquipId
+                    ? <span style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 5 }}><WIcon name="info" size={12} color={WT.accent} />Equipamento exigido pelo procedimento selecionado.</span>
+                    : <button type="button" onClick={() => { upd({ equip: '' }); setShowEquip(false); }} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: WT.muted, fontSize: 12, cursor: 'pointer', fontFamily: WT.font, padding: 0 }}>Remover equipamento</button>}
+                </div>
+              : <button type="button" onClick={() => setShowEquip(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, height: 26, padding: '0 10px', borderRadius: WT.rM, border: `1px dashed ${WT.borderHover}`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 13, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="plus" size={14} color={WT.accent} />Adicionar equipamento</button>}
+          </FRow>
+        )}
 
-        <Section icon="banknote" title="Pagamento">
-          {!window.__mvp && <WToggle checked={form.plano} onChange={v => upd({ plano: v })} label="É plano / convênio?" />}
-          <div style={{ display: 'grid', gridTemplateColumns: (!window.__mvp && form.plano) ? '1fr' : (showTabela ? '1fr 1fr' : '1fr'), gap: 12 }}>
-            {!window.__mvp && form.plano && <WSelect label="Convênio" required value={form.convenio} onChange={v => upd({ convenio: v })} options={CONVENIOS.filter(c => c !== 'Particular')} error={errors.convenio} size="l" />}
-            {(window.__mvp || !form.plano) && showTabela && <WSelect label="Tabela particular" required={reqTabela} value={form.tabela} onChange={v => upd({ tabela: v })} options={TABELA_OPTS} error={errors.tabela} size="l" />}
-            {(window.__mvp || !form.plano) && <WInput label="Valor" required value={form.valor} onChange={v => upd({ valor: v })} prefixIcon="banknote" error={errors.valor} size="l" />}
-          </div>
-          {!window.__mvp && form.plano && <WInput label="Carteirinha / matrícula" value={form.paciente.Matricula1 || ''} onChange={v => updPac('Matricula1', v)} required={requiredSet.has('Matricula1')} error={errors.pac_Matricula1} size="l" />}
-        </Section>
+        <FDivider />
+        <FHead>Pagamento</FHead>
+        {!window.__mvp && (
+          <WSegmented fullWidth options={[{ value: 'convenio', label: 'Convênio' }, { value: 'particular', label: 'Particular' }]}
+            value={form.plano ? 'convenio' : 'particular'} onChange={v => upd({ plano: v === 'convenio' })} />
+        )}
+        {!window.__mvp && form.plano && (
+          <>
+            <FRow icon="globe">
+              <WSelect value={form.convenio} onChange={v => upd({ convenio: v })} options={CONVENIOS.filter(c => c !== 'Particular')} placeholder="Convênio" error={errors.convenio} />
+            </FRow>
+            <FRow icon="credit-card">
+              <WInput value={form.paciente.Matricula1 || ''} onChange={v => updPac('Matricula1', v)} placeholder="Carteirinha / matrícula" required={requiredSet.has('Matricula1')} error={errors.pac_Matricula1} />
+            </FRow>
+          </>
+        )}
+        {(window.__mvp || !form.plano) && (
+          <>
+            <FRow icon="banknote">
+              <WInput value={form.valor} onChange={v => upd({ valor: v })} placeholder="Valor (R$)" error={errors.valor} />
+            </FRow>
+            {showTabela && (
+              <FRow>
+                <WSelect value={form.tabela} onChange={v => upd({ tabela: v })} options={TABELA_OPTS} placeholder="Tabela particular" error={errors.tabela} />
+              </FRow>
+            )}
+          </>
+        )}
 
-        <Section icon="git-branch" title="Origem & observações">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <WSelect label="Canal de origem" value={form.canal} onChange={v => upd({ canal: v })} options={CHANNELS} size="l" />
-          </div>
-          <WTextarea label="Observações" value={form.notas} onChange={v => upd({ notas: v })} placeholder="Notas internas, preparo, etc." />
-        </Section>
+        <FDivider />
+        <FHead>Origem e observações</FHead>
+        <FRow icon="megaphone">
+          <WSelect value={form.canal} onChange={v => upd({ canal: v })} options={CHANNELS} />
+        </FRow>
+        <FRow icon="text">
+          <WTextarea value={form.notas} onChange={v => upd({ notas: v })} placeholder="Notas internas, preparo, etc." rows={4} />
+        </FRow>
 
-        {init.appt && <NotificationsSection appt={init.appt} />}
+        {init.appt && <><FDivider /><NotificationsSection appt={init.appt} /></>}
       </div>
 
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: 14, borderTop: `1px solid ${WT.border}`, background: WT.raised }}>
@@ -458,35 +583,7 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
   );
 }
 
-// ---- Patient tab bar (Agendamento · Ficha · Histórico · Conta) --------------
-function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms }) {
-  const tabs = [
-    { id: 'agendamento', label: 'Agendamento', icon: 'calendar-days' },
-    { id: 'ficha',       label: 'Ficha',       icon: 'user-round' },
-    { id: 'historico',   label: 'Histórico',   icon: 'list', disabled: !hasPatient || isNewPt, hint: 'Disponível após selecionar/salvar o paciente' },
-    { id: 'conta',       label: 'Conta',       icon: 'wallet', disabled: !perms.verConta || !hasPatient || isNewPt, hint: !perms.verConta ? 'Você não tem permissão para ver a conta' : 'Disponível após selecionar/salvar o paciente' },
-  ];
-  return (
-    <div role="tablist" style={{ display: 'flex', gap: 2, padding: '0 12px', borderBottom: `1px solid ${WT.border}`, background: WT.raised, flex: 'none', overflowX: 'auto' }}>
-      {tabs.map(t => {
-        const active = tab === t.id;
-        return (
-          <button key={t.id} role="tab" aria-selected={active} disabled={t.disabled} title={t.disabled ? t.hint : undefined}
-            onClick={() => { if (!t.disabled) setTab(t.id); }}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, height: 44, padding: '0 12px', border: 'none', background: 'transparent',
-              cursor: t.disabled ? 'not-allowed' : 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: active ? WT.wHead : WT.wEmph, whiteSpace: 'nowrap',
-              color: t.disabled ? WT.placeholder : (active ? WT.accent : WT.fg2), borderBottom: `2px solid ${active ? WT.accentFill : 'transparent'}`, marginBottom: -1,
-            }}>
-            <WIcon name={t.icon} size={16} color={t.disabled ? WT.placeholder : (active ? WT.accent : WT.muted)} />{t.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---- Booking host (drawer / modal / sheet) ----------------------------------
+// ---- Booking host (painel lateral acoplado / sheet no compacto) --------------
 // ---- Trilha de alterações do agendamento (drawer sobreposta) ----------------
 function AuditTrailDrawer({ appt, compact, onClose }) {
   const log = apptAuditLog(appt);
@@ -532,58 +629,184 @@ function AuditTrailDrawer({ appt, compact, onClose }) {
   );
 }
 
-function BookingHost({ init, config, flow, compact, perms, appts, flash, onCancel, onSave, onDraft }) {
-  const [tab, setTab] = React.useState('agendamento');
-  const [showAudit, setShowAudit] = React.useState(false);
-  const [patient, setPatient] = React.useState(init.patient || null);
-  const pid = patient && patient.patientId;
-  const pObj = pid ? patientById(pid) : null;
-  const isNewPt = !pid || !!(patient && patient.isNew);
-  const hasPatient = !!pObj;
-  const _perms = perms || { editFicha: true, verConta: true };
-  const title = init.fitIn ? 'Novo encaixe' : (init.editing ? 'Editar agendamento' : 'Novo agendamento');
-  const ptName = pObj ? pObj.name : (patient && patient.patientName);
-
-  const editing = !!init.editing && !!init.appt;
-  const Header = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: `1px solid ${WT.borderSub}`, flex: 'none' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 16, fontWeight: WT.wHead, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ptName || title}</div>
-        <div style={{ fontSize: 12, color: WT.muted }}>{ptName ? title + ' · ' : ''}{fmtLongDate(init.date || TODAY)}{init.time ? ` · ${init.time}` : ''}</div>
-      </div>
-      {editing && <WButton variant="default" size="s" leadingIcon="history" label="Alterações" onClick={() => setShowAudit(true)} />}
-      <WIconButton name="x" onClick={onCancel} />
-    </div>
-  );
-
-  let body;
-  if (tab === 'ficha') body = <FichaTab patient={pObj} pending={patient} perms={_perms} onFlash={flash} />;
-  else if (tab === 'historico') body = <HistoricoTab patient={pObj} appts={appts} />;
-  else if (tab === 'conta') body = <ContaTab patient={pObj} perms={_perms} onFlash={flash} />;
-  else body = <BookingForm init={init} config={config} perms={_perms} onCancel={onCancel} onSave={onSave} onDraft={onDraft} onPatientChange={setPatient} />;
-
-  const useSheet = compact;
-  const useModal = !compact && flow === 'modal';
-  const wide = tab !== 'agendamento';
-  const vw = window.innerWidth;
-  // Tamanho fixo: a ficha é a prioridade de dimensionamento, então a drawer
-  // mantém a mesma largura em ambas as abas (não encolhe no agendamento).
-  const width = useSheet ? '100%' : Math.min(880, vw - 48);
+// ---- Pílula do painel minimizado (padrão "compose" do Gmail) ----------------
+// Minimizar não é fechar: o painel só some da vista (nada desmonta), então o
+// rascunho continua no grid e o formulário volta intacto ao clique.
+function MinimizedPill({ label, when, compact, onRestore, onClose }) {
+  const [hover, setHover] = React.useState(false);
   return (
-    <div onMouseDown={onCancel} style={{ position: 'fixed', inset: 0, background: WT.backdrop || '#25282880', zIndex: 1100, display: 'flex', justifyContent: useModal ? 'center' : (useSheet ? 'center' : 'flex-end'), alignItems: useSheet ? 'flex-end' : (useModal ? 'center' : 'stretch'), padding: useModal ? 24 : 0 }}>
-      <div onMouseDown={e => e.stopPropagation()} style={{
-        background: WT.raised, display: 'flex', flexDirection: 'column', boxShadow: WT.shDialog,
-        width, height: (useModal && !wide) ? 'auto' : '100%', maxHeight: useSheet ? '94%' : (useModal ? '92vh' : '100%'),
-        maxWidth: '100%', borderRadius: useSheet ? '16px 16px 0 0' : (useModal ? 16 : 0),
-        animation: useSheet ? 'sheetUp .22s ease' : 'drawerIn .2s ease', transition: 'width .2s ease', overflow: 'hidden',
-      }}>
-        {Header}
-        <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} />
-        {body}
-      </div>
-      {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
+    <div style={{
+      position: 'fixed', zIndex: 1000, display: 'flex', alignItems: 'center', gap: 2,
+      background: WT.raised, boxShadow: WT.shDialog, border: `1px solid ${WT.border}`,
+      animation: 'sheetUp .18s ease',
+      ...(compact
+        ? { left: 0, right: 0, bottom: 0, padding: '6px 8px 6px 14px', borderWidth: '1px 0 0' }
+        : { right: 16, bottom: 16, maxWidth: 420, padding: '4px 6px 4px 14px', borderRadius: WT.pill }),
+    }}>
+      <button type="button" onClick={onRestore} title="Restaurar"
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          flex: 1, minWidth: 0, height: 36, padding: 0, border: 'none', background: 'transparent',
+          cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, fontSize: 13.5,
+          fontWeight: WT.wEmph, color: hover ? WT.accent : WT.fg,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+        {/* o horário nunca é cortado: quem encolhe é o nome */}
+        <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+        <span style={{ flex: 'none', color: WT.muted, fontWeight: WT.wBody, fontVariantNumeric: 'tabular-nums' }}>· {when}</span>
+      </button>
+      <WIconButton name="x" dim={30} title="Descartar" onClick={onClose} />
     </div>
   );
 }
 
-Object.assign(window, { PatientAutocomplete, QuickCreatePopover, PatientField, BookingForm, BookingHost, AuditTrailDrawer });
+function BookingHost({ init, kind: kindProp, config, compact, perms, appts, flash, slotPick, draft, minimized, onMinimize, onRestore, onCancel, onSave, onDraft, onBlockConfirm, onBlockDelete }) {
+  const editing = !!init.editing && !!init.appt;
+  const editingBlock = !!init.block;
+  const isEdit = editing || editingBlock;
+  // Tipo de criação (Agendamento · Bloqueio · Encaixe). Na edição o tipo é fixo —
+  // não há conversão entre tipos, então o seletor não aparece.
+  const [kind, setKind] = React.useState(kindProp || (editingBlock ? 'bloqueio' : (init.fitIn ? 'encaixe' : 'agendamento')));
+  // troca de tipo → o placeholder no grid muda de aparência na hora
+  React.useEffect(() => { onDraft && onDraft({ kind }); }, [kind]);
+  const [showAudit, setShowAudit] = React.useState(false);
+  const [patient, setPatient] = React.useState(init.patient || null);
+  const pObj = patient && patient.patientId ? patientById(patient.patientId) : null;
+  const ptName = kind === 'bloqueio' ? null : (pObj ? pObj.name : (patient && patient.patientName));
+  const _perms = perms || { editFicha: true, verConta: true };
+  const TITLES = {
+    agendamento: editing ? 'Editar agendamento' : 'Novo agendamento',
+    encaixe: editing ? 'Editar encaixe' : 'Novo encaixe',
+    bloqueio: editingBlock ? 'Bloqueio' : 'Novo bloqueio',
+  };
+  const title = TITLES[kind] || TITLES.agendamento;
+
+  // Pilha de sub-telas sobre o formulário ({id, title}) — o formulário é a raiz e continua
+  // montado embaixo, então empilhar e voltar nunca mexem no que foi digitado. Um nível futuro
+  // (trilha do bloqueio, detalhe de pagamento) entra aqui sem chrome novo.
+  const [stack, setStack] = React.useState([]);
+  const top = stack[stack.length - 1] || null;
+  const pushView = v => setStack(s => [...s, v]);
+  const popView = () => setStack(s => s.slice(0, -1));
+  // sem paciente as sub-telas dele deixam de ter assunto
+  React.useEffect(() => { if (!patient) setStack([]); }, [!patient]);
+  // contatos editados na Ficha voltam ao formulário (mesmo formato de `slotPick`)
+  const [contactPatch, setContactPatch] = React.useState(null);
+  const onFichaSaved = c => setContactPatch(p => ({ ...c, seq: (p ? p.seq : 0) + 1 }));
+
+  // Fechar é a ação destrutiva: com o formulário preenchido, pergunta antes de descartar.
+  // Cada formulário reporta o próprio estado; vale o do tipo ativo.
+  const [dirty, setDirty] = React.useState({ visita: false, bloqueio: false });
+  const [confirmClose, setConfirmClose] = React.useState(false);
+  const isDirty = kind === 'bloqueio' ? dirty.bloqueio : dirty.visita;
+  const requestClose = () => (isDirty ? setConfirmClose(true) : onCancel());
+  const reportDirty = (slot, v) => setDirty(s => (s[slot] === v ? s : { ...s, [slot]: v }));
+
+  // resumo do rascunho na pílula: "tipo — paciente · dia hora"
+  const d = draft || {};
+  const pillDate = d.date || init.date || TODAY;
+  const pillLabel = ptName ? `${title} — ${ptName}` : title;
+  const pillWhen = `${DOW_ABBR[parseISO(pillDate).getDay()]} ${d.allDay ? 'dia inteiro' : (d.time || init.time || '')}`.trim();
+
+  const overlays = (
+    <>
+      {minimized && <MinimizedPill label={pillLabel} when={pillWhen} compact={compact} onRestore={onRestore} onClose={requestClose} />}
+      {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
+      {confirmClose && (
+        <CenterModal title="Descartar este rascunho?" icon="alert-triangle" iconTone="danger" width={430}
+          onClose={() => setConfirmClose(false)}
+          footer={<>
+            <WButton variant="plain" leadingIcon="chevron-down" label="Minimizar" onClick={() => { setConfirmClose(false); onMinimize(); }} />
+            <span style={{ flex: 1 }} />
+            <WButton variant="default" label="Continuar editando" onClick={() => setConfirmClose(false)} />
+            <WButton variant="danger" label="Descartar" onClick={() => { setConfirmClose(false); onCancel(); }} />
+          </>}>
+          <div style={{ fontSize: 14, color: WT.fg2, lineHeight: 1.55 }}>
+            O que você preencheu será perdido. <strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>Minimizar</strong> mantém tudo como está e devolve a largura da agenda.
+          </div>
+        </CenterModal>
+      )}
+    </>
+  );
+
+  const inner = (
+    <>
+      {/* mesma altura do toolbar da agenda — as duas barras se alinham numa linha contínua;
+          a data/hora do rascunho já vive nos campos do formulário, sem subtítulo duplicado.
+          Dentro de uma sub-tela o título vira "{nome} — {seção}" com a volta à esquerda. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', height: 49, boxSizing: 'border-box', borderBottom: `1px solid ${WT.border}`, flex: 'none' }}>
+        {top && <WIconButton name="arrow-left" title="Voltar ao agendamento" onClick={popView} style={{ marginLeft: -8 }} />}
+        {/* na sub-tela quem encolhe é o nome: a seção diz onde se está e não pode ser cortada */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', fontSize: 16, fontWeight: WT.wHead, color: WT.fg }}>
+          <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ptName || title}</span>
+          {top && <span style={{ flex: 'none', color: WT.fg2 }}>&nbsp;— {top.title}</span>}
+        </div>
+        {!top && editing && <WButton variant="default" size="s" leadingIcon="history" label="Alterações" onClick={() => setShowAudit(true)} />}
+        {/* minimizar (guarda o rascunho) vs fechar (descarta) — dois glifos distintos */}
+        <WIconButton name="chevron-down" title="Minimizar" onClick={onMinimize} />
+        <WIconButton name="x" title="Fechar" onClick={requestClose} />
+      </div>
+      {/* raiz da pilha: sai da vista quando há sub-tela, mas continua montada */}
+      <div style={{ display: top ? 'none' : 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        {!isEdit && (
+          <div style={{ padding: '12px 16px 0', flex: 'none' }}>
+            <WSegmented fullWidth value={kind} onChange={setKind}
+              options={[{ value: 'agendamento', label: 'Agendamento' }, { value: 'bloqueio', label: 'Bloqueio' }, { value: 'encaixe', label: 'Encaixe' }]} />
+          </div>
+        )}
+        {/* Ambos os formulários ficam montados na criação (troca de tipo não perde dados). */}
+        {!editingBlock && (
+          <div style={{ display: kind !== 'bloqueio' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <BookingForm init={init} config={config} perms={_perms} slotPick={slotPick} contactPatch={contactPatch} onCancel={requestClose}
+              active={kind !== 'bloqueio'} onDirty={v => reportDirty('visita', v)} onOpenPatient={pushView}
+              onSave={({ form, checkin }) => onSave({ form, checkin, fitIn: kind === 'encaixe' })}
+              onDraft={patch => onDraft && onDraft({ ...patch, kind })} onPatientChange={setPatient} />
+          </div>
+        )}
+        {!editing && (
+          <div style={{ display: kind === 'bloqueio' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <BlockForm ctx={{ proId: init.proId, date: init.date, time: init.time }} block={init.block} appts={appts}
+              slotPick={slotPick} active={kind === 'bloqueio'} onDraft={onDraft} onDirty={v => reportDirty('bloqueio', v)}
+              onCancel={requestClose} onConfirm={onBlockConfirm} onDelete={onBlockDelete} />
+          </div>
+        )}
+      </div>
+      {top && (
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          {top.id === 'ficha' && <FichaTab patient={pObj} pending={patient} perms={_perms} onFlash={flash} onSaved={onFichaSaved} />}
+          {top.id === 'historico' && <HistoricoTab patient={pObj} appts={appts} />}
+          {top.id === 'conta' && <ContaTab patient={pObj} perms={_perms} onFlash={flash} />}
+        </div>
+      )}
+    </>
+  );
+
+  // Minimizado o painel só sai da vista (`display:none`) — nada desmonta, então o formulário
+  // volta intacto. As sobreposições ficam FORA da faixa escondida, senão sumiriam com ela.
+  if (!compact) {
+    return (
+      <>
+        <aside style={{ width: 330, flex: 'none', minWidth: 0, borderLeft: `1px solid ${WT.border}`, background: WT.raised, display: minimized ? 'none' : 'flex', flexDirection: 'column' }}>
+          {inner}
+        </aside>
+        {overlays}
+      </>
+    );
+  }
+  return (
+    <>
+      <div onMouseDown={requestClose} style={{ position: 'fixed', inset: 0, background: WT.backdrop || '#25282880', zIndex: 1100, display: minimized ? 'none' : 'flex', justifyContent: 'center', alignItems: 'flex-end' }}>
+        <div onMouseDown={e => e.stopPropagation()} style={{
+          background: WT.raised, display: 'flex', flexDirection: 'column', boxShadow: WT.shDialog,
+          width: '100%', height: '100%', maxHeight: '94%', maxWidth: '100%',
+          borderRadius: '16px 16px 0 0', animation: 'sheetUp .22s ease', overflow: 'hidden',
+        }}>
+          {inner}
+        </div>
+      </div>
+      {overlays}
+    </>
+  );
+}
+
+Object.assign(window, { PatientAutocomplete, QuickCreatePopover, PatientField, BookingForm, BookingHost, MinimizedPill, DrillChip, AuditTrailDrawer, FRow, FHead, FDivider });

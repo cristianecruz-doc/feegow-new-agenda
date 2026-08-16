@@ -90,10 +90,21 @@ function Toolbar({ state, set, onNew, compact }) {
   const open = (kind, rect) => setPop(p => (p && p.kind === kind ? null : { kind, rect }));
   const close = () => { setPop(null); setFq(''); };
 
-  const dateLabel = view === 'semana'
+  // A barra se adapta à PRÓPRIA largura (container query em index.html): quem a estreita
+  // é o sidebar e o painel de agendamento, não o viewport. As duas versões do seletor de
+  // visão ficam no DOM e o CSS decide qual aparece — o mesmo vale para a data e o zoom.
+  const showZoom = view !== 'mes';
+  // dia: rótulo longo e curto convivem; semana e mês têm um rótulo só
+  const dateOne = view === 'semana'
     ? `${fmtShortDate(state.date)} – ${fmtShortDate(dateUtil.addDays(dateUtil.weekDaysOf(date)[5], 0))}`
     : view === 'mes' ? `${MONTHS[parseISO(date).getMonth()]} ${parseISO(date).getFullYear()}`
-    : fmtLongDate(date);
+    : null;
+
+  // "Hoje" só aparece quando hoje NÃO está no período visível — estando nele o
+  // botão não teria para onde levar
+  const showToday = view === 'semana' ? !dateUtil.weekDaysOf(date, 7).includes(TODAY)
+    : view === 'mes' ? (parseISO(date).getMonth() !== parseISO(TODAY).getMonth() || parseISO(date).getFullYear() !== parseISO(TODAY).getFullYear())
+    : date !== TODAY;
 
   const specs = PROS.flatMap(p => specsOf(p)).filter((v, i, a) => a.indexOf(v) === i);
   // um profissional se encaixa no conjunto de filtros (especialidade + sala + convênio)?
@@ -147,28 +158,31 @@ function Toolbar({ state, set, onNew, compact }) {
   const noResults = ql && !fProOpts.length && !fSpecs.length && !fConv.length && !fUnits.length && !fRooms.length && !fProcs.length;
 
   return (
-    <div style={{ flex: 'none', background: WT.raised, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-      {/* left: date navigation */}
-      <WButton variant="default" label="Hoje" onClick={() => set({ date: TODAY })} />
+    <div className="ag-bar" data-views={viewOpts.length} style={{ flex: 'none', background: WT.raised, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'nowrap' }}>
+      {/* esquerda: setas · data (abre o calendário) · Hoje (só fora de hoje) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <WIconButton name="chevron-left" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? -7 : view === 'mes' ? -30 : -1) }))} />
-        <WIconButton name="chevron-right" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? 7 : view === 'mes' ? 30 : 1) }))} />
+        <WIconButton name="chevron-left" title="Anterior" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? -7 : view === 'mes' ? -30 : -1) }))} />
+        <WIconButton name="chevron-right" title="Próximo" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? 7 : view === 'mes' ? 30 : 1) }))} />
       </div>
-      <button onClick={e => open('cal', e.currentTarget.getBoundingClientRect())} style={{
-        display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: WT.rM,
-        border: `1px solid transparent`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 15, color: WT.fg, fontWeight: WT.wHead, textTransform: 'capitalize',
+      <button onClick={e => open('cal', e.currentTarget.getBoundingClientRect())} title="Escolher data" style={{
+        display: 'flex', alignItems: 'center', flex: 'none', height: 32, padding: '0 8px', borderRadius: WT.rM,
+        border: `1px solid transparent`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 15, color: WT.fg, fontWeight: WT.wHead, textTransform: 'capitalize', whiteSpace: 'nowrap',
       }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-        <WIcon name="calendar-days" size={17} color={WT.accent} />
-        {!compact && dateLabel}
-        <WIcon name="chevron-down" size={14} />
+        {dateOne || <><span className="ag-date-long">{fmtLongDate(date)}</span><span className="ag-date-short">{fmtShortDate(date)}</span></>}
       </button>
+      {showToday && <WButton variant="default" label="Hoje" style={{ flex: 'none' }} onClick={() => set({ date: TODAY })} />}
 
       <div style={{ flex: 1 }} />
 
-      {/* right: view tabs · filtros · ajustes · novo */}
-      {compact
-        ? <WSelect value={view} onChange={v => set({ view: v })} options={viewOpts} placeholder="" style={{ width: 140 }} />
-        : <WSegmented options={viewOpts} value={view} onChange={v => set({ view: v })} />}
+      {/* right: view tabs · filtros · ajustes · novo
+          As duas formas do seletor ficam montadas; o container query mostra uma.
+          `fit`: o dropdown acompanha a visão escolhida, não a opção mais longa. */}
+      <span className="ag-views-seg" style={{ flex: 'none' }}>
+        <WSegmented options={viewOpts} value={view} onChange={v => set({ view: v })} />
+      </span>
+      <span className="ag-views-sel" style={{ flex: 'none' }}>
+        <WSelect fit value={view} onChange={v => set({ view: v })} options={viewOpts} placeholder="" />
+      </span>
 
       <button onClick={e => open('filters', e.currentTarget.getBoundingClientRect())} style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: WT.rM,
@@ -180,7 +194,13 @@ function Toolbar({ state, set, onNew, compact }) {
         {activeCount > 0 && <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: WT.pill, background: WT.accentFill, color: '#fff', fontSize: 11, fontWeight: WT.wHead, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{activeCount}</span>}
       </button>
 
-      {view !== 'mes' && <ZoomStepper value={state.zoom || 1} onChange={z => set({ zoom: z })} />}
+      {/* apertado, o zoom se recolhe para dentro de "Configurações de visualização" —
+          é ajuste de refino, cede a vez para data e visão */}
+      {showZoom && (
+        <span className="ag-zoom-bar" style={{ flex: 'none' }}>
+          <ZoomStepper value={state.zoom || 1} onChange={z => set({ zoom: z })} />
+        </span>
+      )}
 
       <WIconButton name="sliders-horizontal" title="Configurações de visualização" active={pop && pop.kind === 'viewcfg'} onClick={e => open('viewcfg', e.currentTarget.getBoundingClientRect())} />
 
@@ -224,6 +244,13 @@ function Toolbar({ state, set, onNew, compact }) {
         <WPopover anchorRect={pop.rect} onClose={close} width={264} placement="below">
           <div style={{ padding: '12px 14px 4px', fontSize: 14, fontWeight: WT.wHead, color: WT.fg }}>Configurações de visualização</div>
           <div style={{ padding: '8px 14px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* o zoom só aparece aqui quando não coube na barra (mesmo container query) */}
+            {showZoom && (
+              <div className="ag-zoom-menu" style={{ alignItems: 'center', gap: 10, paddingBottom: 12, borderBottom: `1px solid ${WT.borderSub}` }}>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Zoom da grade</span>
+                <ZoomStepper value={state.zoom || 1} onChange={z => set({ zoom: z })} />
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Indicação de cor do profissional</span>
               <WSegmented value={state.cardStyle} onChange={v => set({ cardStyle: v })}
