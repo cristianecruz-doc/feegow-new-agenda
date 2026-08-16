@@ -90,10 +90,22 @@ function Toolbar({ state, set, onNew, compact }) {
   const open = (kind, rect) => setPop(p => (p && p.kind === kind ? null : { kind, rect }));
   const close = () => { setPop(null); setFq(''); };
 
+  // "container query": o gatilho é a largura da própria barra (o painel de agendamento
+  // e o sidebar a estreitam), não a do viewport — abaixo do limiar o segmented de
+  // views vira dropdown em vez de quebrar para uma segunda linha
+  const barRef = React.useRef(null);
+  const [narrow, setNarrow] = React.useState(false);
+  React.useEffect(() => {
+    const el = barRef.current; if (!el) return;
+    const ro = new ResizeObserver(() => setNarrow(el.clientWidth < 1080));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const dateLabel = view === 'semana'
     ? `${fmtShortDate(state.date)} – ${fmtShortDate(dateUtil.addDays(dateUtil.weekDaysOf(date)[5], 0))}`
     : view === 'mes' ? `${MONTHS[parseISO(date).getMonth()]} ${parseISO(date).getFullYear()}`
-    : compact ? fmtShortDate(date) : fmtLongDate(date);
+    : (compact || narrow) ? fmtShortDate(date) : fmtLongDate(date);
 
   // "Hoje" só aparece quando hoje NÃO está no período visível — estando nele o
   // botão não teria para onde levar
@@ -153,7 +165,7 @@ function Toolbar({ state, set, onNew, compact }) {
   const noResults = ql && !fProOpts.length && !fSpecs.length && !fConv.length && !fUnits.length && !fRooms.length && !fProcs.length;
 
   return (
-    <div style={{ flex: 'none', background: WT.raised, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+    <div ref={barRef} style={{ flex: 'none', background: WT.raised, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
       {/* esquerda: setas · data (abre o calendário) · Hoje (só fora de hoje) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <WIconButton name="chevron-left" title="Anterior" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? -7 : view === 'mes' ? -30 : -1) }))} />
@@ -170,8 +182,10 @@ function Toolbar({ state, set, onNew, compact }) {
       <div style={{ flex: 1 }} />
 
       {/* right: view tabs · filtros · ajustes · novo */}
-      {compact
-        ? <WSelect value={view} onChange={v => set({ view: v })} options={viewOpts} placeholder="" style={{ width: 140 }} />
+      {/* `fit`: o dropdown se ajusta à visão escolhida. Com largura fixa ele mal ganhava
+          espaço sobre o segmented — ainda menos na edição MVP, que só tem duas opções. */}
+      {(compact || narrow)
+        ? <WSelect fit value={view} onChange={v => set({ view: v })} options={viewOpts} placeholder="" />
         : <WSegmented options={viewOpts} value={view} onChange={v => set({ view: v })} />}
 
       <button onClick={e => open('filters', e.currentTarget.getBoundingClientRect())} style={{

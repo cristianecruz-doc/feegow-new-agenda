@@ -343,7 +343,26 @@ function FDivider() {
 }
 
 // ---- Full booking form (Tier 2) --------------------------------------------
-function BookingForm({ init, config, perms, slotPick, active, onCancel, onSave, onDraft, onPatientChange, embedded }) {
+// campos que contam como "preenchido pelo usuário" — data/hora/profissional/local ficam de
+// fora porque mudam ao arrastar o rascunho pelo grid, não por digitação
+const DIRTY_KEYS = ['patient', 'procIds', 'plano', 'convenio', 'tabela', 'valor', 'canal', 'notas', 'paciente', 'equip'];
+
+// entrada para uma sub-tela do paciente — as três dividem a largura do painel
+function DrillChip({ label, onClick }) {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button type="button" onClick={onClick}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        flex: 1, minWidth: 0, height: 28, padding: '0 8px', borderRadius: WT.rM,
+        border: `1px solid ${hover ? WT.borderHover : WT.border}`, background: hover ? WT.hover : '#fff',
+        cursor: 'pointer', fontFamily: WT.font, fontSize: 13, fontWeight: WT.wEmph,
+        color: hover ? WT.accent : WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>{label}</button>
+  );
+}
+
+function BookingForm({ init, config, perms, slotPick, contactPatch, active, onCancel, onSave, onDraft, onPatientChange, onDirty, onOpenPatient, embedded }) {
   const [form, setForm] = React.useState(() => {
     const f = {
       patient: init.patient || null, procIds: init.procIds || (init.procId ? [init.procId] : []), proId: init.proId || PROS[0].id,
@@ -357,6 +376,12 @@ function BookingForm({ init, config, perms, slotPick, active, onCancel, onSave, 
   const [errors, setErrors] = React.useState({});
   const upd = patch => setForm(s => ({ ...s, ...patch }));
   const updPac = (k, v) => setForm(s => ({ ...s, paciente: { ...s.paciente, [k]: v } }));
+  // fechar com o formulário mexido pede confirmação — a referência é o estado inicial,
+  // então abrir e fechar uma edição existente continua fechando direto
+  const pristine = React.useRef(null);
+  if (!pristine.current) pristine.current = form;
+  const dirty = DIRTY_KEYS.some(k => JSON.stringify(form[k]) !== JSON.stringify(pristine.current[k]));
+  React.useEffect(() => { onDirty && onDirty(dirty); }, [dirty]);
   const totalDur = form.procIds.reduce((s, id) => s + ((PROCS[id] || {}).dur || 0), 0);
   // pré-visualização ao vivo no grid: o placeholder acompanha tudo que é digitado
   React.useEffect(() => {
@@ -373,6 +398,12 @@ function BookingForm({ init, config, perms, slotPick, active, onCancel, onSave, 
   const reqEquipId = form.procIds.map(id => (PROCS[id] || {}).reqEquip).find(Boolean) || null;
   const [showEquip, setShowEquip] = React.useState(!!init.equip);
   React.useEffect(() => { if (reqEquipId && form.equip !== reqEquipId) upd({ equip: reqEquipId }); }, [reqEquipId]);
+
+  // contatos salvos na Ficha do paciente voltam para os campos do agendamento
+  React.useEffect(() => {
+    if (!contactPatch) return;
+    setForm(s => ({ ...s, paciente: { ...s.paciente, Cel1: contactPatch.Cel1 || s.paciente.Cel1, Email1: contactPatch.Email1 || s.paciente.Email1 } }));
+  }, [contactPatch && contactPatch.seq]);
 
   // clique num horário vago do grid com o painel aberto → atualiza data/horário/profissional
   React.useEffect(() => {
@@ -400,10 +431,13 @@ function BookingForm({ init, config, perms, slotPick, active, onCancel, onSave, 
 
   // prefill known data for existing patient so required fields are satisfied
   React.useEffect(() => {
-    if (form.patient && form.patient.patientId) {
-      const p = patientById(form.patient.patientId) || {};
-      setForm(s => ({ ...s, paciente: { ...s.paciente, Nascimento: s.paciente.Nascimento || p.birth, Cel1: s.paciente.Cel1 || p.phone } }));
-    }
+    if (!(form.patient && form.patient.patientId)) return;
+    const p = patientById(form.patient.patientId) || {};
+    const paciente = { ...form.paciente, Nascimento: form.paciente.Nascimento || p.birth, Cel1: form.paciente.Cel1 || p.phone };
+    // o que o sistema preenche sozinho não é "conteúdo digitado": entra também na
+    // referência, senão abrir uma edição já contaria como formulário sujo
+    pristine.current = { ...pristine.current, paciente: { ...pristine.current.paciente, Nascimento: paciente.Nascimento, Cel1: paciente.Cel1 } };
+    setForm(s => ({ ...s, paciente }));
   }, [form.patient && form.patient.patientId]);
 
   function validate() {
@@ -448,6 +482,15 @@ function BookingForm({ init, config, perms, slotPick, active, onCancel, onSave, 
           <PatientAutocomplete noLabel value={form.patient} onSelect={p => upd({ patient: p })} onNew={name => upd({ patient: { patientName: name, isNew: true } })} error={errors.patient} />
           {form.patient && form.patient.isNew && (
             <div style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 6 }}><WIcon name="info" size={13} color={WT.accent} />Novo cadastro — preencha os dados exigidos pela clínica.</div>
+          )}
+          {/* sub-telas do paciente — empilham no próprio painel, sem sair do formulário.
+              Histórico e Conta pressupõem paciente já cadastrado (um novo não tem nem um nem outra). */}
+          {form.patient && onOpenPatient && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <DrillChip label="Ficha" onClick={() => onOpenPatient({ id: 'ficha', title: 'Ficha' })} />
+              {form.patient.patientId && <DrillChip label="Histórico" onClick={() => onOpenPatient({ id: 'historico', title: 'Histórico' })} />}
+              {form.patient.patientId && perms.verConta && <DrillChip label="Conta" onClick={() => onOpenPatient({ id: 'conta', title: 'Conta' })} />}
+            </div>
           )}
           {form.patient && errors._contact && <div style={{ fontSize: 12, color: WT.danger, display: 'flex', alignItems: 'center', gap: 4 }}><WIcon name="alert-circle" size={12} color={WT.danger} />{errors._contact}</div>}
           {form.patient && (
@@ -586,7 +629,38 @@ function AuditTrailDrawer({ appt, compact, onClose }) {
   );
 }
 
-function BookingHost({ init, kind: kindProp, config, compact, perms, appts, flash, slotPick, onCancel, onSave, onDraft, onBlockConfirm, onBlockDelete }) {
+// ---- Pílula do painel minimizado (padrão "compose" do Gmail) ----------------
+// Minimizar não é fechar: o painel só some da vista (nada desmonta), então o
+// rascunho continua no grid e o formulário volta intacto ao clique.
+function MinimizedPill({ label, when, compact, onRestore, onClose }) {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <div style={{
+      position: 'fixed', zIndex: 1000, display: 'flex', alignItems: 'center', gap: 2,
+      background: WT.raised, boxShadow: WT.shDialog, border: `1px solid ${WT.border}`,
+      animation: 'sheetUp .18s ease',
+      ...(compact
+        ? { left: 0, right: 0, bottom: 0, padding: '6px 8px 6px 14px', borderWidth: '1px 0 0' }
+        : { right: 16, bottom: 16, maxWidth: 420, padding: '4px 6px 4px 14px', borderRadius: WT.pill }),
+    }}>
+      <button type="button" onClick={onRestore} title="Restaurar"
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          flex: 1, minWidth: 0, height: 36, padding: 0, border: 'none', background: 'transparent',
+          cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, fontSize: 13.5,
+          fontWeight: WT.wEmph, color: hover ? WT.accent : WT.fg,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+        {/* o horário nunca é cortado: quem encolhe é o nome */}
+        <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+        <span style={{ flex: 'none', color: WT.muted, fontWeight: WT.wBody, fontVariantNumeric: 'tabular-nums' }}>· {when}</span>
+      </button>
+      <WIconButton name="x" dim={30} title="Descartar" onClick={onClose} />
+    </div>
+  );
+}
+
+function BookingHost({ init, kind: kindProp, config, compact, perms, appts, flash, slotPick, draft, minimized, onMinimize, onRestore, onCancel, onSave, onDraft, onBlockConfirm, onBlockDelete }) {
   const editing = !!init.editing && !!init.appt;
   const editingBlock = !!init.block;
   const isEdit = editing || editingBlock;
@@ -607,61 +681,132 @@ function BookingHost({ init, kind: kindProp, config, compact, perms, appts, flas
   };
   const title = TITLES[kind] || TITLES.agendamento;
 
+  // Pilha de sub-telas sobre o formulário ({id, title}) — o formulário é a raiz e continua
+  // montado embaixo, então empilhar e voltar nunca mexem no que foi digitado. Um nível futuro
+  // (trilha do bloqueio, detalhe de pagamento) entra aqui sem chrome novo.
+  const [stack, setStack] = React.useState([]);
+  const top = stack[stack.length - 1] || null;
+  const pushView = v => setStack(s => [...s, v]);
+  const popView = () => setStack(s => s.slice(0, -1));
+  // sem paciente as sub-telas dele deixam de ter assunto
+  React.useEffect(() => { if (!patient) setStack([]); }, [!patient]);
+  // contatos editados na Ficha voltam ao formulário (mesmo formato de `slotPick`)
+  const [contactPatch, setContactPatch] = React.useState(null);
+  const onFichaSaved = c => setContactPatch(p => ({ ...c, seq: (p ? p.seq : 0) + 1 }));
+
+  // Fechar é a ação destrutiva: com o formulário preenchido, pergunta antes de descartar.
+  // Cada formulário reporta o próprio estado; vale o do tipo ativo.
+  const [dirty, setDirty] = React.useState({ visita: false, bloqueio: false });
+  const [confirmClose, setConfirmClose] = React.useState(false);
+  const isDirty = kind === 'bloqueio' ? dirty.bloqueio : dirty.visita;
+  const requestClose = () => (isDirty ? setConfirmClose(true) : onCancel());
+  const reportDirty = (slot, v) => setDirty(s => (s[slot] === v ? s : { ...s, [slot]: v }));
+
+  // resumo do rascunho na pílula: "tipo — paciente · dia hora"
+  const d = draft || {};
+  const pillDate = d.date || init.date || TODAY;
+  const pillLabel = ptName ? `${title} — ${ptName}` : title;
+  const pillWhen = `${DOW_ABBR[parseISO(pillDate).getDay()]} ${d.allDay ? 'dia inteiro' : (d.time || init.time || '')}`.trim();
+
+  const overlays = (
+    <>
+      {minimized && <MinimizedPill label={pillLabel} when={pillWhen} compact={compact} onRestore={onRestore} onClose={requestClose} />}
+      {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
+      {confirmClose && (
+        <CenterModal title="Descartar este rascunho?" icon="alert-triangle" iconTone="danger" width={430}
+          onClose={() => setConfirmClose(false)}
+          footer={<>
+            <WButton variant="plain" leadingIcon="chevron-down" label="Minimizar" onClick={() => { setConfirmClose(false); onMinimize(); }} />
+            <span style={{ flex: 1 }} />
+            <WButton variant="default" label="Continuar editando" onClick={() => setConfirmClose(false)} />
+            <WButton variant="danger" label="Descartar" onClick={() => { setConfirmClose(false); onCancel(); }} />
+          </>}>
+          <div style={{ fontSize: 14, color: WT.fg2, lineHeight: 1.55 }}>
+            O que você preencheu será perdido. <strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>Minimizar</strong> mantém tudo como está e devolve a largura da agenda.
+          </div>
+        </CenterModal>
+      )}
+    </>
+  );
+
   const inner = (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: `1px solid ${WT.borderSub}`, flex: 'none' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: WT.wHead, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ptName || title}</div>
-          <div style={{ fontSize: 12, color: WT.muted }}>{ptName ? title + ' · ' : ''}{fmtLongDate(init.date || TODAY)}{init.time ? ` · ${init.time}` : ''}</div>
+      {/* mesma altura do toolbar da agenda — as duas barras se alinham numa linha contínua;
+          a data/hora do rascunho já vive nos campos do formulário, sem subtítulo duplicado.
+          Dentro de uma sub-tela o título vira "{nome} — {seção}" com a volta à esquerda. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', height: 49, boxSizing: 'border-box', borderBottom: `1px solid ${WT.border}`, flex: 'none' }}>
+        {top && <WIconButton name="arrow-left" title="Voltar ao agendamento" onClick={popView} style={{ marginLeft: -8 }} />}
+        {/* na sub-tela quem encolhe é o nome: a seção diz onde se está e não pode ser cortada */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', fontSize: 16, fontWeight: WT.wHead, color: WT.fg }}>
+          <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ptName || title}</span>
+          {top && <span style={{ flex: 'none', color: WT.fg2 }}>&nbsp;— {top.title}</span>}
         </div>
-        {editing && <WButton variant="default" size="s" leadingIcon="history" label="Alterações" onClick={() => setShowAudit(true)} />}
-        <WIconButton name="x" onClick={onCancel} />
+        {!top && editing && <WButton variant="default" size="s" leadingIcon="history" label="Alterações" onClick={() => setShowAudit(true)} />}
+        {/* minimizar (guarda o rascunho) vs fechar (descarta) — dois glifos distintos */}
+        <WIconButton name="chevron-down" title="Minimizar" onClick={onMinimize} />
+        <WIconButton name="x" title="Fechar" onClick={requestClose} />
       </div>
-      {!isEdit && (
-        <div style={{ padding: '12px 16px 0', flex: 'none' }}>
-          <WSegmented fullWidth value={kind} onChange={setKind}
-            options={[{ value: 'agendamento', label: 'Agendamento' }, { value: 'bloqueio', label: 'Bloqueio' }, { value: 'encaixe', label: 'Encaixe' }]} />
-        </div>
-      )}
-      {/* Ambos os formulários ficam montados na criação (troca de tipo não perde dados). */}
-      {!editingBlock && (
-        <div style={{ display: kind !== 'bloqueio' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          <BookingForm init={init} config={config} perms={_perms} slotPick={slotPick} onCancel={onCancel}
-            active={kind !== 'bloqueio'}
-            onSave={({ form, checkin }) => onSave({ form, checkin, fitIn: kind === 'encaixe' })}
-            onDraft={patch => onDraft && onDraft({ ...patch, kind })} onPatientChange={setPatient} />
-        </div>
-      )}
-      {!editing && (
-        <div style={{ display: kind === 'bloqueio' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          <BlockForm ctx={{ proId: init.proId, date: init.date, time: init.time }} block={init.block} appts={appts}
-            slotPick={slotPick} active={kind === 'bloqueio'} onDraft={onDraft}
-            onCancel={onCancel} onConfirm={onBlockConfirm} onDelete={onBlockDelete} />
+      {/* raiz da pilha: sai da vista quando há sub-tela, mas continua montada */}
+      <div style={{ display: top ? 'none' : 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        {!isEdit && (
+          <div style={{ padding: '12px 16px 0', flex: 'none' }}>
+            <WSegmented fullWidth value={kind} onChange={setKind}
+              options={[{ value: 'agendamento', label: 'Agendamento' }, { value: 'bloqueio', label: 'Bloqueio' }, { value: 'encaixe', label: 'Encaixe' }]} />
+          </div>
+        )}
+        {/* Ambos os formulários ficam montados na criação (troca de tipo não perde dados). */}
+        {!editingBlock && (
+          <div style={{ display: kind !== 'bloqueio' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <BookingForm init={init} config={config} perms={_perms} slotPick={slotPick} contactPatch={contactPatch} onCancel={requestClose}
+              active={kind !== 'bloqueio'} onDirty={v => reportDirty('visita', v)} onOpenPatient={pushView}
+              onSave={({ form, checkin }) => onSave({ form, checkin, fitIn: kind === 'encaixe' })}
+              onDraft={patch => onDraft && onDraft({ ...patch, kind })} onPatientChange={setPatient} />
+          </div>
+        )}
+        {!editing && (
+          <div style={{ display: kind === 'bloqueio' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <BlockForm ctx={{ proId: init.proId, date: init.date, time: init.time }} block={init.block} appts={appts}
+              slotPick={slotPick} active={kind === 'bloqueio'} onDraft={onDraft} onDirty={v => reportDirty('bloqueio', v)}
+              onCancel={requestClose} onConfirm={onBlockConfirm} onDelete={onBlockDelete} />
+          </div>
+        )}
+      </div>
+      {top && (
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          {top.id === 'ficha' && <FichaTab patient={pObj} pending={patient} perms={_perms} onFlash={flash} onSaved={onFichaSaved} />}
+          {top.id === 'historico' && <HistoricoTab patient={pObj} appts={appts} />}
+          {top.id === 'conta' && <ContaTab patient={pObj} perms={_perms} onFlash={flash} />}
         </div>
       )}
     </>
   );
 
+  // Minimizado o painel só sai da vista (`display:none`) — nada desmonta, então o formulário
+  // volta intacto. As sobreposições ficam FORA da faixa escondida, senão sumiriam com ela.
   if (!compact) {
     return (
-      <aside style={{ width: 380, flex: 'none', minWidth: 0, borderLeft: `1px solid ${WT.border}`, background: WT.raised, display: 'flex', flexDirection: 'column' }}>
-        {inner}
-        {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
-      </aside>
+      <>
+        <aside style={{ width: 330, flex: 'none', minWidth: 0, borderLeft: `1px solid ${WT.border}`, background: WT.raised, display: minimized ? 'none' : 'flex', flexDirection: 'column' }}>
+          {inner}
+        </aside>
+        {overlays}
+      </>
     );
   }
   return (
-    <div onMouseDown={onCancel} style={{ position: 'fixed', inset: 0, background: WT.backdrop || '#25282880', zIndex: 1100, display: 'flex', justifyContent: 'center', alignItems: 'flex-end' }}>
-      <div onMouseDown={e => e.stopPropagation()} style={{
-        background: WT.raised, display: 'flex', flexDirection: 'column', boxShadow: WT.shDialog,
-        width: '100%', height: '100%', maxHeight: '94%', maxWidth: '100%',
-        borderRadius: '16px 16px 0 0', animation: 'sheetUp .22s ease', overflow: 'hidden',
-      }}>
-        {inner}
+    <>
+      <div onMouseDown={requestClose} style={{ position: 'fixed', inset: 0, background: WT.backdrop || '#25282880', zIndex: 1100, display: minimized ? 'none' : 'flex', justifyContent: 'center', alignItems: 'flex-end' }}>
+        <div onMouseDown={e => e.stopPropagation()} style={{
+          background: WT.raised, display: 'flex', flexDirection: 'column', boxShadow: WT.shDialog,
+          width: '100%', height: '100%', maxHeight: '94%', maxWidth: '100%',
+          borderRadius: '16px 16px 0 0', animation: 'sheetUp .22s ease', overflow: 'hidden',
+        }}>
+          {inner}
+        </div>
       </div>
-      {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
-    </div>
+      {overlays}
+    </>
   );
 }
 
-Object.assign(window, { PatientAutocomplete, QuickCreatePopover, PatientField, BookingForm, BookingHost, AuditTrailDrawer, FRow, FHead, FDivider });
+Object.assign(window, { PatientAutocomplete, QuickCreatePopover, PatientField, BookingForm, BookingHost, MinimizedPill, DrillChip, AuditTrailDrawer, FRow, FHead, FDivider });
