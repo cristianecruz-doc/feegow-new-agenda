@@ -189,13 +189,28 @@ function WTextarea({ label, value, onChange, placeholder, rows = 3, required, er
 }
 
 // ---- Select (native, styled) ------------------------------------------------
-function WSelect({ label, value, onChange, options, placeholder = 'Selecione…', required, error, size = 'm', style = {} }) {
+// fit: o controle acompanha a opção ESCOLHIDA, não a mais longa da lista — para uma barra
+// apertada, onde o <select> só compensa se de fato ocupar menos que os botões que substitui.
+const W_SELECT_CHROME = 40; // padding do quadro (2×10) + calha da seta (18) + 2 de folga
+                            // — sem a folga o arredondamento do texto medido já corta em "…"
+function WSelect({ label, value, onChange, options, placeholder = 'Selecione…', required, error, size = 'm', fit, style = {} }) {
   const [focus, setFocus] = React.useState(false);
   const bc = error ? WT.borderDanger : (focus ? WT.borderHi : WT.border);
   const h = size === 'l' ? 44 : 32;
   const opts = options.map(o => (typeof o === 'string' ? { value: o, label: o } : o));
+  // medida do rótulo atual num gêmeo invisível; observado em vez de calculado uma vez,
+  // então a troca de opção, de idioma e a chegada da webfont reajustam sozinhas
+  const ghostRef = React.useRef(null);
+  const [fitW, setFitW] = React.useState(0);
+  React.useEffect(() => {
+    const el = ghostRef.current; if (!el) return;
+    const ro = new ResizeObserver(() => setFitW(Math.ceil(el.getBoundingClientRect().width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit]);
+  const selLabel = (opts.find(o => o.value === value) || {}).label || placeholder;
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, ...style }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(fit && fitW ? { width: fitW + W_SELECT_CHROME } : null), ...style }}>
       {label && <WLabel required={required}>{label}</WLabel>}
       <span style={{
         position: 'relative', height: h, borderRadius: WT.rM, border: `1px solid ${bc}`, background: '#fff',
@@ -205,11 +220,14 @@ function WSelect({ label, value, onChange, options, placeholder = 'Selecione…'
         <select value={value} onChange={e => onChange && onChange(e.target.value)}
           onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
           style={{ appearance: 'none', WebkitAppearance: 'none', border: 'none', outline: 'none', background: 'transparent',
-            font: `${WT.wBody} 14px ${WT.font}`, color: value ? WT.fg : WT.muted, flex: 1, cursor: 'pointer', paddingRight: 18 }}>
+            font: `${WT.wBody} 14px ${WT.font}`, color: value ? WT.fg : WT.muted, flex: 1, cursor: 'pointer', paddingRight: 18,
+            // o <select> nativo mede a opção mais longa; sem isto ele estoura a coluna estreita
+            minWidth: 0, textOverflow: 'ellipsis' }}>
           {placeholder && <option value="">{placeholder}</option>}
           {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <WIcon name="chevron-down" size={16} style={{ position: 'absolute', right: 8, pointerEvents: 'none' }} />
+        {fit && <span ref={ghostRef} aria-hidden style={{ position: 'absolute', left: 0, top: 0, visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none', font: `${WT.wBody} 14px ${WT.font}` }}>{selLabel}</span>}
       </span>
       {error && <span style={{ fontSize: 12, color: WT.danger }}>{error}</span>}
     </label>

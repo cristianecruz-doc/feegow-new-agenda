@@ -74,6 +74,7 @@ function App() {
   const [ctxCard, setCtxCard] = React.useState(null);  // {a, rect}
   const [quick, setQuick] = React.useState(null);       // {ctx, rect}
   const [booking, setBooking] = React.useState(null);   // {init, kind, key} — painel lateral de criação/edição
+  const [minimized, setMinimized] = React.useState(false); // painel recolhido na pílula (padrão Gmail)
   const [cancel, setCancel] = React.useState(null);     // {a}
   const [blockPick, setBlockPick] = React.useState(null); // [blocks] — chooser na semanal
   const [draft, setDraft] = React.useState(null); // {colId, time, dur} — placeholder do agendamento em criação
@@ -139,8 +140,8 @@ function App() {
   }
 
   // sem `kind` explícito, o tipo sai do próprio init (init.fitIn / init.block) — ver BookingHost
-  const openBooking = (init, kind) => { setQuick(null); setCtxCard(null); setSlotPick(null); setBooking({ init, kind, key: uid() }); };
-  const closeBooking = () => { setBooking(null); setDraft(null); setSlotPick(null); };
+  const openBooking = (init, kind) => { setQuick(null); setCtxCard(null); setSlotPick(null); setMinimized(false); setBooking({ init, kind, key: uid() }); };
+  const closeBooking = () => { setBooking(null); setDraft(null); setSlotPick(null); setMinimized(false); };
   const openBlockEdit = b => openBooking({ block: b, date: b.date, time: b.allDay ? null : b.start, proId: app.dayPro }, 'bloqueio');
 
   // "Criar" na barra lateral não parte de um horário do grid: é o caminho de quem está
@@ -177,7 +178,8 @@ function App() {
     // painel lateral aberto → o grid vira um seletor: o clique preenche data/hora/profissional.
     // O rascunho não é tocado aqui: com o painel aberto o formulário é a fonte do placeholder
     // (sobrescrevê-lo apagaria tipo/procedimentos quando o clique repete o horário atual).
-    if (booking) { setSlotPick(s => ({ ...ctx, seq: (s ? s.seq : 0) + 1 })); return; }
+    // Com o painel minimizado o clique também o traz de volta — escolher outro horário é uma ação só.
+    if (booking) { setSlotPick(s => ({ ...ctx, seq: (s ? s.seq : 0) + 1 })); setMinimized(false); return; }
     // horário já ocupado pelo profissional escolhido → o que está sendo criado é um encaixe.
     // Só vale na ABERTURA e só em coluna de profissional (equipamento/sala fora do escopo).
     ctx.fitIn = !slot.equip && !slot.room && busyAt(ctx.proId, slot.date, ctx.time);
@@ -352,7 +354,8 @@ function App() {
 
   const bookingHost = booking && (
     <BookingHost key={booking.key} init={booking.init} kind={booking.kind} config={config} compact={compact} perms={PERMS}
-      appts={appts} flash={flash} slotPick={slotPick}
+      appts={appts} flash={flash} slotPick={slotPick} draft={draft}
+      minimized={minimized} onMinimize={() => setMinimized(true)} onRestore={() => setMinimized(false)}
       onCancel={closeBooking} onSave={onBookingSave} onDraft={onDraft}
       onBlockConfirm={onBlockConfirm} onBlockDelete={onBlockDelete} />
   );
@@ -393,10 +396,11 @@ function App() {
               {state.view === 'sala' && <RoomView {...viewProps} />}
               {state.view === 'programacao' && <ProgramacaoView {...viewProps} />}
             </div>
-            {!compact && bookingHost}
           </div>
             </>}
         </main>
+        {/* painel em altura total — terceira faixa vertical, irmã do sidebar (não fica sob o toolbar) */}
+        {!compact && app.page !== 'agenda-config' && bookingHost}
       </div>
 
       {/* overlays */}

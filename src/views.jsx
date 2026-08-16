@@ -377,6 +377,9 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft, drag, colMinWidth = 200, headerRender }) {
   const gutterW = 56;
   const colW = Math.round(colMinWidth * Math.max(0.7, Math.min(1.2, zoom)));
+  // largura tem dois pontos: conforto (colW, alvo com espaço de sobra) e piso (80% dele) —
+  // as colunas comprimem até o piso antes de acionar o scroll horizontal
+  const colFloorW = Math.round(colW * 0.8);
   const scroller = React.useRef(null);
   const [expanded, setExpanded] = React.useState(false);
   // recorte automático: o dia começa no primeiro horário com conteúdo (grade/agendamento),
@@ -408,10 +411,10 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   const hours = []; for (let h = trimStart; h <= endMin; h += 60) hours.push(h);
   return (
     <div ref={scroller} style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
-      <div style={{ minWidth: gutterW + columns.length * colW, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ minWidth: gutterW + columns.length * colFloorW, display: 'flex', flexDirection: 'column' }}>
         {/* sticky header */}
         <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', background: WT.raised, borderBottom: `1px solid ${WT.border}` }}>
-          <div style={{ width: gutterW, flex: 'none', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
+          <div style={{ width: gutterW, flex: 'none', position: 'sticky', left: 0, zIndex: 1, background: WT.raised, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
             {(expanded || firstContent != null) && trimFull > startMin && (
               <button onClick={() => setExpanded(v => !v)} title={expanded ? `Ocultar horários vazios (${fmtMin(startMin)}–${fmtMin(trimFull)})` : `Mostrar horários anteriores (${fmtMin(startMin)}–${fmtMin(trimFull)})`}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 3, height: 20, padding: '0 6px', borderRadius: WT.pill, border: `1px solid ${WT.border}`, background: '#fff', color: WT.muted, fontFamily: WT.font, fontSize: 10.5, cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
@@ -421,7 +424,7 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
             )}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
+            <div key={c.id} style={{ flex: 1, minWidth: colFloorW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
               {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} subParts={c.subParts} occupancy={c.occupancy} />}
             </div>
           ))}
@@ -429,13 +432,14 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
         {/* body — 24px reservados no topo para as abas de nome de grade (ancoradas acima do 1º slot) */}
         <div style={{ display: 'flex', paddingTop: 24 }}>
           {/* time gutter */}
-          <div style={{ width: gutterW, flex: 'none', position: 'relative', height: (endMin - trimStart) * pxPerMin }}>
+          {/* sticky no eixo horizontal: as horas nunca saem da vista quando o grid rola de lado */}
+          <div style={{ width: gutterW, flex: 'none', position: 'sticky', left: 0, zIndex: 9, background: WT.raised, height: (endMin - trimStart) * pxPerMin }}>
             {hours.map(h => (
               <div key={h} style={{ position: 'absolute', top: (h - trimStart) * pxPerMin - 7, right: 8, fontSize: 11, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>{fmtMin(h)}</div>
             ))}
           </div>
           {columns.map((c, i) => (
-            <div key={c.id} data-col-id={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
+            <div key={c.id} data-col-id={c.id} style={{ flex: 1, minWidth: colFloorW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
               <ColumnTrack colId={c.id} appts={c.appts} blocks={c.blocks} startMin={trimStart} endMin={endMin}
                 slotMin={slotMin} pxPerMin={pxPerMin} cardStyle={cardStyle} freeOnly={freeOnly} bookable={c.bookable !== false} showPro={c.showPro != null ? c.showPro : showPro} grades={c.grades} coverage={c.coverage}
                 onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} isToday={c.date === dateForToday} />

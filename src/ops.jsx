@@ -66,7 +66,7 @@ function CancelModal({ a, onClose, onConfirm }) {
 
 // Formulário de bloqueio — corpo rolável + rodapé fixo, renderizado dentro do
 // painel lateral de criação/edição (BookingHost). Substitui o antigo BlockModal.
-function BlockForm({ ctx, block, appts, slotPick, active, onDraft, onCancel, onConfirm, onDelete }) {
+function BlockForm({ ctx, block, appts, slotPick, active, onDraft, onDirty, onCancel, onConfirm, onDelete }) {
   const editing = !!block;
   const perms = block ? blockEditable(block) : { edit: true, del: false };
   const readOnly = editing && !perms.edit;
@@ -93,6 +93,14 @@ function BlockForm({ ctx, block, appts, slotPick, active, onDraft, onCancel, onC
 
   const isRange = date !== dateEnd;
   const sd = allDay ? '00:00' : start, ed = allDay ? '23:59' : end;
+
+  // "preenchido pelo usuário" para o X pedir confirmação — horários e recursos ficam de fora,
+  // são o que o clique no grid altera sozinho
+  const dirty = titulo.trim() !== (block ? (block.titulo || '') : '')
+    || descricao.trim() !== (block ? (block.descricao || '') : '')
+    || dias.length !== ((block && block.diasSemana) || []).length
+    || clinica !== (block ? block.scope === 'clinica' : false);
+  React.useEffect(() => { onDirty && onDirty(dirty); }, [dirty]);
 
   // clique num horário vago do grid com o painel aberto → atualiza data/horário
   React.useEffect(() => {
