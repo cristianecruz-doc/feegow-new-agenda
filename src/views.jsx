@@ -84,7 +84,7 @@ function occupancyOf(appts, startMin, endMin, blocks) {
 }
 
 // ---- Column header ----------------------------------------------------------
-function ColHeader({ entity, sub, subParts, occupancy, onPick }) {
+function ColHeader({ entity, sub, subParts, occupancy, onPick, date }) {
   const icon = entity.kindIcon || 'user-round';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', minWidth: 0 }}>
@@ -105,6 +105,7 @@ function ColHeader({ entity, sub, subParts, occupancy, onPick }) {
             </div>
           : sub && <div style={{ fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
       </div>
+      <WaitlistColPill proId={entity.id} date={date} />
       {occupancy != null && !window.__mvp && <OccupancyRing pct={occupancy} />}
     </div>
   );
@@ -168,7 +169,7 @@ function GradeBandHeader({ g, HEADER_H }) {
 }
 
 function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin, cardStyle, freeOnly, bookable = true, showPro, grades, coverage,
-  onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft, drag, isToday }) {
+  onSlotClick, onCardOpen, onBlockOpen, onBlockPick, draft, drag, isToday, date }) {
   const ref = React.useRef(null);
   const [hoverMin, setHoverMin] = React.useState(null);
   const GUTTER = 24; // faixa clicável à direita p/ criar agendamento paralelo (mesmo horário), estilo Google
@@ -285,7 +286,8 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
       {/* hover ghost / drop indicator */}
       {hoverMin != null && !drag.appt && (
         <GhostSlot top={(hoverMin - startMin) * pxPerMin} height={slotDefaultAt(hoverMin) * pxPerMin - 2} gutter={GUTTER} parallel={occupied(hoverMin)}
-          onClick={() => onSlotClick(colId, hoverMin, ref.current.getBoundingClientRect())} />
+          s={hoverMin} dur={slotDefaultAt(hoverMin)}
+          onClick={rect => onSlotClick(colId, hoverMin, rect || ref.current.getBoundingClientRect())} />
       )}
       {dropMin != null && (() => {
         const invalid = rangeBlocked(dropMin, drag.appt.dur || slotMin);
@@ -341,7 +343,12 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
   React.useEffect(() => { setExpanded(false); if (scroller.current) scroller.current.scrollTop = 0; }, [scrollKey]);
   const hours = []; for (let h = trimStart; h <= endMin; h += 60) hours.push(h);
   return (
-    <div ref={scroller} style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
+    <div ref={scroller} onDragOver={e => {
+      // auto-scroll durante o arraste (permite soltar em horários fora da área visível)
+      const el = scroller.current; if (!el) return; const b = el.getBoundingClientRect(); const EDGE = 64;
+      if (e.clientY - b.top < EDGE) el.scrollTop -= 12;
+      else if (b.bottom - e.clientY < EDGE) el.scrollTop += 12;
+    }} style={{ height: '100%', overflow: 'auto', background: WT.raised }}>
       <div style={{ minWidth: gutterW + columns.length * colW, display: 'flex', flexDirection: 'column' }}>
         {/* sticky header */}
         <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', background: WT.raised, borderBottom: `1px solid ${WT.border}` }}>
@@ -356,7 +363,7 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
           </div>
           {columns.map((c, i) => (
             <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : 'none', opacity: (freeOnly && c.bookable === false) ? 0.55 : 1 }}>
-              {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} subParts={c.subParts} occupancy={c.occupancy} />}
+              {headerRender ? headerRender(c) : <ColHeader entity={c.entity} sub={c.sub} subParts={c.subParts} occupancy={c.occupancy} date={c.date} />}
             </div>
           ))}
         </div>
@@ -372,7 +379,7 @@ function ColumnGrid({ columns, startMin, endMin, slotMin, pxPerMin, zoom = 1, ca
             <div key={c.id} style={{ flex: 1, minWidth: colW, borderLeft: i ? `1px solid ${WT.borderSub}` : `1px solid ${WT.borderSub}` }}>
               <ColumnTrack colId={c.id} appts={c.appts} blocks={c.blocks} startMin={trimStart} endMin={endMin}
                 slotMin={slotMin} pxPerMin={pxPerMin} cardStyle={cardStyle} freeOnly={freeOnly} bookable={c.bookable !== false} showPro={c.showPro != null ? c.showPro : showPro} grades={c.grades} coverage={c.coverage}
-                onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} isToday={c.date === dateForToday} />
+                onSlotClick={onSlotClick} onCardOpen={onCardOpen} onBlockOpen={onBlockOpen} onBlockPick={onBlockPick} draft={draft} drag={drag} isToday={c.date === dateForToday} date={c.date} />
             </div>
           ))}
         </div>

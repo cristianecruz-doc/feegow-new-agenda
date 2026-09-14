@@ -72,6 +72,8 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus }) {
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
   const sel = value ? (patientById(value.patientId) || { name: value.patientName }) : null;
+  // paciente definido de fora (ex.: escolhido na lista de espera) fecha a busca e mostra o chip
+  React.useEffect(() => { if (value) { setOpen(false); setQ(''); } }, [value && (value.patientId || value.patientName)]);
   const matches = q ? PATIENTS.filter(p => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 6) : [];
   if (sel && !open) {
     return (
@@ -164,6 +166,13 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
   React.useEffect(() => { if (grade && grade.procs) setProcIds(ids => ids.filter(id => grade.procs.includes(id))); }, [time]);
   // mantém o placeholder no grid sincronizado com horário + duração em criação
   React.useEffect(() => { onDraft && onDraft({ time, dur: totalDur || gradeSlotAt(proId, ctx.date, time) || 30 }); }, [time, totalDur]);
+  const [wlSrc, setWlSrc] = React.useState(null); // entrada da lista de espera escolhida aqui
+  const [wlMode, setWlMode] = React.useState('novo'); // 'novo' | 'espera'
+  const wlCands = React.useMemo(() => {
+    const h = window.__waitHints; if (!h || !h.entries) return [];
+    const g = gradeAt(ctx.proId, ctx.date, ctx.time);
+    return h.entries.filter(e => !g || !g.procs || g.procs.includes(e.proc));
+  }, [ctx.proId, ctx.date, ctx.time]);
   const save = () => {
     const e = {};
     if (!patient) e.patient = 'Selecione um paciente';
@@ -174,7 +183,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
     if (cardExpired && requireValidCard) e.conv = `Carteirinha vencida em ${ptRec.cardExp} — atualize o cadastro para agendar por convênio`;
     if (needPrepay && !prepaid) e.prepay = 'Confirme o pagamento antecipado para agendar';
     if (Object.keys(e).length) { setErr(e); return; }
-    onSave({ ...ctx, proId, patient, procIds, time, payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular' });
+    onSave({ ...ctx, proId, patient, procIds, time, payPlano: pay === 'convenio', payConv: pay === 'convenio' ? conv : 'Particular', wlId: wlSrc && wlSrc.id });
   };
   return (
     <WPopover anchorRect={anchorRect} onClose={onClose} width={340}>
@@ -204,7 +213,39 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
             <span style={{ fontSize: 12, color: WT.fg2 }}>{grade.start}–{grade.end} · intervalo {grade.slotMin} min</span>
           </div>
         )}
-        <PatientAutocomplete value={patient} onSelect={setPatient} onNew={name => { setPatient({ patientName: name, isNew: true }); }} error={err.patient} autoFocus />
+        {wlCands.length > 0 && !patient && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: WT.inset }}>
+            <WSegmented value={wlMode} onChange={v => { setWlMode(v); if (v === 'novo') { setWlSrc(null); setPatient(null); setProcIds([]); } }}
+              options={[{ value: 'novo', label: 'Paciente novo' }, { value: 'espera', label: `Lista de espera (${wlCands.length})` }]} />
+            {wlMode === 'espera' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 148, overflow: 'auto' }}>
+                {wlCands.map(e => {
+                  const p = patientById(e.pt) || { name: e.pt };
+                  const on = wlSrc && wlSrc.id === e.id;
+                  return (
+                    <button key={e.id} onClick={() => { setWlSrc(e); setPatient({ patientId: e.pt, patientName: p.name }); setProcIds([e.proc]); setTel(e.phone || p.phone || ''); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: WT.rM, cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, border: `1px solid ${on ? WT.borderAccent : WT.border}`, background: on ? WT.accentSoft : '#fff' }}>
+                      <WIcon name="clipboard-list" size={12} color={on ? WT.accent : WT.muted} style={{ flex: 'none' }} />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: 12.5, fontWeight: WT.wEmph, color: on ? WT.accent : WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                        <span style={{ display: 'block', fontSize: 11, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(PROCS[e.proc] || {}).name} · {WL_TURNS[e.turn]}</span>
+                      </span>
+                      {e.urg !== 'normal' && <WBadge type={WL_URG[e.urg].badge}>{WL_URG[e.urg].label}</WBadge>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {wlSrc && (() => { const p = patientById(wlSrc.pt) || { name: wlSrc.pt }; return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: WT.rM, background: WT.accentSoft, fontSize: 12, color: WT.accent }}>
+            <WIcon name="clipboard-list" size={13} color={WT.accent} />
+            <span style={{ flex: 1 }}>{p.name} sai da lista de espera ao salvar.</span>
+            <WIconButton name="x" dim={22} title="Desfazer" onClick={() => { setWlSrc(null); setWlMode('novo'); setPatient(null); setProcIds([]); }} />
+          </div>
+        ); })()}
+        <PatientAutocomplete value={patient} onSelect={p => { setPatient(p); setWlSrc(null); }} onNew={name => { setPatient({ patientName: name, isNew: true }); setWlSrc(null); }} error={err.patient} autoFocus />
         <WInput label="Telefone" required value={tel} onChange={v => { setTel(v); setErr(s => ({ ...s, tel: undefined })); }} placeholder="(11) 90000-0000" suffixIcon="phone" error={err.tel} size="l" />
         <ProcMultiSelect label="Procedimentos" required value={procIds} onChange={setProcIds} error={err.proc}
           hint={grade && grade.procs ? 'limitado pela grade' : null} options={allowedProcs} />
@@ -239,6 +280,8 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}`, background: WT.inset, flex: 'none' }}>
         <WButton variant="plain" leadingIcon="settings-2" label="Mais opções" onClick={() => onMore({ ...ctx, patient, procIds, time })} />
+        <WButton variant="plain" leadingIcon="clipboard-list" label="Sem horário bom? Lista de espera"
+          onClick={() => { onClose(); if (window.__waitHints && window.__waitHints.onAddFromBooking) window.__waitHints.onAddFromBooking({ pt: patient && patient.patientId, proc: procIds && procIds[0], pro: proId }); }} />
         <span style={{ flex: 1 }} />
         <WButton variant="primary" leadingIcon="check" label="Salvar" onClick={save} />
       </div>
@@ -532,16 +575,19 @@ function AuditTrailDrawer({ appt, compact, onClose }) {
   );
 }
 
-function BookingHost({ init, config, flow, compact, perms, appts, flash, onCancel, onSave, onDraft }) {
+function BookingHost({ init, config, flow, compact, perms, appts, flash, onCancel, onSave, onDraft, onBlock, push }) {
   const [tab, setTab] = React.useState('agendamento');
+  const [kind, setKind] = React.useState(init.fitIn ? 'encaixe' : 'agendamento');
   const [showAudit, setShowAudit] = React.useState(false);
   const [patient, setPatient] = React.useState(init.patient || null);
   const pid = patient && patient.patientId;
   const pObj = pid ? patientById(pid) : null;
   const isNewPt = !pid || !!(patient && patient.isNew);
   const hasPatient = !!pObj;
+  // Ficha / Histórico / Conta só existem depois de escolher o paciente
+  React.useEffect(() => { if (!hasPatient && tab !== 'agendamento') setTab('agendamento'); }, [hasPatient]);
   const _perms = perms || { editFicha: true, verConta: true };
-  const title = init.fitIn ? 'Novo encaixe' : (init.editing ? 'Editar agendamento' : 'Novo agendamento');
+  const title = kind === 'encaixe' ? 'Novo encaixe' : (init.editing ? 'Editar agendamento' : 'Novo agendamento');
   const ptName = pObj ? pObj.name : (patient && patient.patientName);
 
   const editing = !!init.editing && !!init.appt;
@@ -556,11 +602,33 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
     </div>
   );
 
+  // tipo de ação escolhido no topo da criação (agendamento · bloqueio · encaixe)
+  const KindBar = !init.editing && (
+    <div style={{ flex: 'none', padding: '10px 16px', borderBottom: `1px solid ${WT.borderSub}`, background: WT.inset }}>
+      <WSegmented value={kind} onChange={v => { if (v === 'bloqueio') { if (onBlock) onBlock({ proId: init.proId, date: init.date, time: init.time }); return; } setKind(v); }}
+        options={[{ value: 'agendamento', label: 'Agendamento' }, { value: 'bloqueio', label: 'Bloqueio' }, { value: 'encaixe', label: 'Encaixe' }]} />
+    </div>
+  );
+
   let body;
   if (tab === 'ficha') body = <FichaTab patient={pObj} pending={patient} perms={_perms} onFlash={flash} />;
   else if (tab === 'historico') body = <HistoricoTab patient={pObj} appts={appts} />;
   else if (tab === 'conta') body = <ContaTab patient={pObj} perms={_perms} onFlash={flash} />;
-  else body = <BookingForm init={init} config={config} perms={_perms} onCancel={onCancel} onSave={onSave} onDraft={onDraft} onPatientChange={setPatient} />;
+  else body = <BookingForm init={{ ...init, fitIn: kind === 'encaixe' }} config={config} perms={_perms} onCancel={onCancel} onSave={onSave} onDraft={onDraft} onPatientChange={setPatient} />;
+
+  // modo "empurra": painel lateral no fluxo da página, sem scrim — a agenda continua visível e utilizável
+  if (push) {
+    const pw = tab === 'agendamento' ? 460 : 720;
+    return (
+      <div style={{ flex: 'none', width: pw, maxWidth: '50%', display: 'flex', flexDirection: 'column', background: WT.raised, borderLeft: `1px solid ${WT.border}`, minWidth: 0, minHeight: 0, overflow: 'hidden', transition: 'width .2s ease', animation: 'drawerIn .2s ease' }}>
+        {Header}
+        {KindBar}
+        {hasPatient && <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} />}
+        {body}
+        {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
+      </div>
+    );
+  }
 
   const useSheet = compact;
   const useModal = !compact && flow === 'modal';
@@ -578,7 +646,8 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
         animation: useSheet ? 'sheetUp .22s ease' : 'drawerIn .2s ease', transition: 'width .2s ease', overflow: 'hidden',
       }}>
         {Header}
-        <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} />
+        {KindBar}
+        {hasPatient && <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} />}
         {body}
       </div>
       {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}

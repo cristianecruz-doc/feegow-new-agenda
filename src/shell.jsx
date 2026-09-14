@@ -185,6 +185,14 @@ function LangMenu({ lang, onLang }) {
   );
 }
 function TopNavbar({ unit, onUnit, onToggleSidebar, compact, edition, onEdition, lang, onLang, page, onNavigate }) {
+  // largura da janela: abaixo de ~1240px o menu perde espaço e os módulos menos usados
+  // vão para "Mais" (1366 com Windows a 125% → 1093px CSS)
+  const [vw, setVw] = React.useState(() => window.innerWidth);
+  React.useEffect(() => { const h = () => setVw(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  const keep = vw < 1120 ? 3 : vw < 1240 ? 4 : vw < 1360 ? 5 : FEEGOW_MENU.length;
+  const shown = FEEGOW_MENU.slice(0, keep);
+  const overflow = FEEGOW_MENU.slice(keep);
+  const tight = vw < 1240;
   return (
     <header style={{ flex: 'none', display: 'flex', flexDirection: 'column', zIndex: 30 }}>
       {/* Linha 1 — faixa escura: alternador de produtos */}
@@ -207,11 +215,12 @@ function TopNavbar({ unit, onUnit, onToggleSidebar, compact, edition, onEdition,
       <div style={{ height: 52, background: WT.raised, borderBottom: `1px solid ${WT.border}`, display: 'flex', alignItems: 'center', gap: 2, padding: '0 10px', flex: 'none' }}>
         <WIconButton name="menu" onClick={onToggleSidebar} color={WT.fg} title="Menu" />
         {!compact && (
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 4, minWidth: 0, overflow: 'hidden' }}>
-            {FEEGOW_MENU.map(m => <ModuleItem key={m.label} {...m} active={m.label === 'Agenda'} items={m.label === 'Agenda' ? AGENDA_SUBMENU : null} current={page || 'agenda'} onNavigate={onNavigate} />)}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 4, minWidth: 0 }}>
+            {shown.map(m => <ModuleItem key={m.label} {...m} active={m.label === 'Agenda'} items={m.label === 'Agenda' ? AGENDA_SUBMENU : null} current={page || 'agenda'} onNavigate={onNavigate} />)}
+            {overflow.length > 0 && <ModuleItem label="Mais" dropdown items={overflow.map(m => ({ id: 'mod-' + m.label, icon: 'square-arrow-out-up-right', label: m.label }))} current={page || 'agenda'} onNavigate={() => {}} />}
             <span style={{ width: 1, height: 22, background: WT.borderSub, margin: '0 6px', flex: 'none' }} />
             <WIconButton name="database" color={WT.fg2} title="Cadastros" />
-            <WIconButton name="settings" color={WT.fg2} title="Configurações" />
+            {!tight && <WIconButton name="settings" color={WT.fg2} title="Configurações" />}
           </nav>
         )}
         <div style={{ flex: 1 }} />
@@ -220,15 +229,15 @@ function TopNavbar({ unit, onUnit, onToggleSidebar, compact, edition, onEdition,
           <span style={{ width: 6, flex: 'none' }} />
           <EditionMenu edition={edition} onEdition={onEdition} />
           <span style={{ width: 1, height: 22, background: WT.borderSub, margin: '0 8px', flex: 'none' }} />
-          {!compact && <WIconButton name="phone" color={WT.fg2} title="Ligações" />}
-          {!compact && <WIconButton name="mail" color={WT.fg2} title="Mensagens" />}
-          {!compact && <WIconButton name="list-checks" color={WT.fg2} title="Tarefas" />}
+          {!compact && !tight && <WIconButton name="phone" color={WT.fg2} title="Ligações" />}
+          {!compact && !tight && <WIconButton name="mail" color={WT.fg2} title="Mensagens" />}
+          {!compact && !tight && <WIconButton name="list-checks" color={WT.fg2} title="Tarefas" />}
           <span style={{ position: 'relative', display: 'inline-flex' }}>
             <WIconButton name="bell" color={WT.fg2} title="Notificações" />
             <span style={{ position: 'absolute', top: 1, right: 1, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 999, background: '#e8503a', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, border: '1.5px solid #fff' }}>8</span>
           </span>
           <WIconButton name="message-square" color={WT.fg2} title="Chat" />
-          {!compact && <WIconButton name="circle-help" color={WT.fg2} title="Ajuda" />}
+          {!compact && !tight && <WIconButton name="circle-help" color={WT.fg2} title="Ajuda" />}
           <button title="Marina R. · Recepção" style={{ width: 32, height: 32, marginLeft: 5, borderRadius: '50%', border: 'none', cursor: 'pointer', background: '#1aa1e6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
             <WIcon name="user-round" size={17} color="#fff" />
           </button>

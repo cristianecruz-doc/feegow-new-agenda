@@ -78,6 +78,11 @@ function App() {
   const [blockPick, setBlockPick] = React.useState(null); // [blocks] — chooser na semanal
   const [draft, setDraft] = React.useState(null); // {colId, time, dur} — placeholder do agendamento em criação
   const [reschedule, setReschedule] = React.useState(null);   // { a, prevFreeOnly } — modo remarcação (fluxo aberto)
+  // ---- lista de espera (pré-agendamento) ----
+  const [wl, setWl] = React.useState(WL_SEED);
+  const [wlOpen, setWlOpen] = React.useState(false);
+  const [wlFit, setWlFit] = React.useState(null);   // { e, prevFreeOnly } — modo "marcar da lista" (igual remarcação)
+  const [wlEdit, setWlEdit] = React.useState(null); // entrada em edição ou {} para nova
   const [toast, setToast] = React.useState(null);
   const [width, setWidth] = React.useState(window.innerWidth);
   React.useEffect(() => { const r = () => setWidth(window.innerWidth); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
@@ -91,7 +96,8 @@ function App() {
   // Prefs de sinalizadores lidas pelos cards (apptFlags)
   window.__cardFlags = { priority: app.showPriorityFlags !== false, newPatient: app.showNewPatientFlag !== false };
   // condição da remarcação em andamento: só destaca horários livres onde o médico atende o convênio + procedimentos
-  window.__rxCond = reschedule ? { conv: reschedule.a.conv || 'Particular', procIds: (reschedule.a.procs && reschedule.a.procs.length ? reschedule.a.procs : (reschedule.a.proc ? [reschedule.a.proc] : [])) } : null;
+  window.__rxCond = reschedule ? { conv: reschedule.a.conv || 'Particular', procIds: (reschedule.a.procs && reschedule.a.procs.length ? reschedule.a.procs : (reschedule.a.proc ? [reschedule.a.proc] : [])) }
+    : wlFit ? { conv: wlFit.e.conv || 'Particular', procIds: [wlFit.e.proc] } : null;
   // filtro de grade ativo (procedimento / convênio): esconde blocos de horário onde não é permitido
   window.__gradeFilter = ((app.filters.proc || []).length || (app.filters.conv || []).length) ? { proc: app.filters.proc || [], conv: app.filters.conv || [] } : null;
   // status alterável direto pelo card (smart tag)
@@ -158,6 +164,7 @@ function App() {
   }
 
   function onSlotClick(colId, min, rect) {
+    if (wlFit) { applyWlFit(colId, min); return; }
     if (reschedule) { applyReschedule(colId, min); return; }
     const slot = resolveSlot(colId);
     const ctx = { ...slot, time: fmtMin(min) };
@@ -176,8 +183,9 @@ function App() {
   function onQuickSave(payload) {
     const na = commitNew(payload);
     setQuick(null); setDraft(null);
+    if (payload.wlId) setWl(s => s.filter(x => x.id !== payload.wlId));
     const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
-    flash(`Agendamento criado · ${pt.name} ${na.start}`);
+    flash(`Agendamento criado · ${pt.name} ${na.start}${payload.wlId ? ' · saída da lista de espera' : ''}`);
   }
 
   function onBookingSave({ form, checkin }) {
@@ -202,6 +210,18 @@ function App() {
     if (a.paid && cfgGet('ContasAPagarCancelamento')) {
       flash(`Agendamento cancelado · conta a pagar de ${brl(a.price || 0)} criada no financeiro`, { tone: 'danger', dur: 4200 });
     } else flash('Agendamento cancelado · horário liberado', { tone: 'danger' });
+    wlOfferFreed(a);
+  }
+  // horário liberado (cancelamento/falta): oferece quem está esperando por essa agenda
+  function wlOfferFreed(a) {
+    const cands = wlForPro(wl, a.pro, a.date);
+    const best = cands.slice().sort((x, y) => ['urgente', 'alta', 'normal'].indexOf(x.urg) - ['urgente', 'alta', 'normal'].indexOf(y.urg))[0];
+    if (!best) return;
+    const pt = wlPatient(best);
+    setTimeout(() => flash(`Horário de ${a.start} livre · ${cands.length} na lista de espera para esta agenda`, {
+      tone: 'info', dur: 8000,
+      action: { label: `Marcar ${pt.name.split(' ')[0]}`, onClick: () => { startWlFit(best); setToast(null); } },
+    }), 900);
   }
   function doReschedule(a) {
     // Configuração: bloquear remarcação de retorno de paciente faltoso
@@ -311,6 +331,34 @@ function App() {
 
   // (waiting-list / Sala de espera feature lives in a separate project — not part of the agenda)
 
+  // sinalização da lista de espera na grade (marca no horário livre + pill no cabeçalho da coluna)
+  window.__waitHints = {
+    entries: wl, show: app.showWaitHints !== false && !reschedule,
+    onOpenPro: () => setWlOpen(true),
+    onAddFromBooking: seed => { setDraft(null); setWlEdit({ ...seed, pt: seed.pt || '', proc: seed.proc || 'derm', anyPro: true }); },
+  };
+  // "Marcar" a partir da lista: mesmo comportamento do remarcar — navega na agenda e escolhe um horário livre
+  function startWlFit(e) {
+    setWlOpen(false); setCtxCard(null); setQuick(null); setDraft(null);
+    setWlFit({ e, prevFreeOnly: app.freeOnly });
+    set({ freeOnly: true });
+  }
+  function cancelWlFit() { if (wlFit) set({ freeOnly: wlFit.prevFreeOnly }); setWlFit(null); }
+  function applyWlFit(colId, min) {
+    const e = wlFit.e;
+    const slot = resolveSlot(colId);
+    const date = slot.date || state.date;
+    const proId = slot.proId || e.pro || PROS[0].id;
+    const g = gradeAt(proId, date, fmtMin(min));
+    if (g && g.procs && !g.procs.includes(e.proc)) { flash(`${(PROCS[e.proc] || {}).name} não é atendido nesta grade`, { tone: 'danger' }); return; }
+    commitNew({ patient: { patientId: e.pt }, procIds: [e.proc], time: fmtMin(min), proId, date, room: g && g.room, payConv: e.conv, payPlano: e.conv !== 'Particular' });
+    setWl(s => s.filter(x => x.id !== e.id));
+    set({ freeOnly: wlFit.prevFreeOnly });
+    setWlFit(null);
+    const pt = wlPatient(e), pro = PROS.find(p => p.id === proId) || {};
+    flash(`${pt.name} agendado · ${dateUtil.fmtShortDate(date)} às ${fmtMin(min)}${pro.short ? ' · ' + pro.short : ''}`, { dur: 5000 });
+  }
+
   const viewProps = { state, set, appts: filtered, blocks, drag: dragApi, onSlotClick, onCardOpen: (a, rect) => setCtxCard({ a, rect }), onBlockOpen: b => setBlockM({ block: b }), onBlockPick: bs => setBlockPick(bs), draft };
 
   // Seletor de agendas na barra lateral (só nas views multi-recurso Dia/Semana)
@@ -340,25 +388,52 @@ function App() {
               <WButton variant="default" size="s" leadingIcon="x" label="Cancelar remarcação" onClick={cancelReschedule} />
             </div>
           ); })()}
-          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {state.view === 'dia' && <DayView {...viewProps} />}
-              {state.view === 'semana' && <WeekView {...viewProps} />}
-              {state.view === 'mes' && <MonthView state={state} set={set} appts={filtered} blocks={blocks} />}
-              {state.view === 'equip' && <EquipmentView {...viewProps} />}
-              {state.view === 'sala' && <RoomView {...viewProps} />}
-              {state.view === 'programacao' && <ProgramacaoView {...viewProps} />}
+          {wlFit && (() => { const wp = wlPatient(wlFit.e), wproc = PROCS[wlFit.e.proc] || {}; const able = wlAblePros(wlFit.e); return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: WT.accentSoft, borderBottom: `1px solid ${WT.borderAccent}`, flex: 'none' }}>
+              <WIcon name="clipboard-list" size={17} color={WT.accent} style={{ flex: 'none' }} />
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: WT.fg }}>
+                <strong style={{ fontWeight: WT.wHead, color: WT.accent }}>Marcando {wp.name} · {wproc.name}</strong>
+                <span style={{ color: WT.fg2 }}> — escolha um horário livre. Estão em destaque apenas as grades que atendem esse procedimento ({able.length} médico{able.length > 1 ? 's' : ''} apto{able.length > 1 ? 's' : ''}); você pode trocar de agenda, data e visualização.</span>
+              </div>
+              <WButton variant="default" size="s" leadingIcon="users" label={`Ver aptos (${able.length})`}
+                onClick={() => set({ view: 'dia', filters: { ...state.filters, pros: able.map(p => p.id) } })} />
+              <WButton variant="default" size="s" leadingIcon="x" label="Cancelar" onClick={cancelWlFit} />
             </div>
+          ); })()}
+          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {state.view === 'dia' && <DayView {...viewProps} />}
+                  {state.view === 'semana' && <WeekView {...viewProps} />}
+                  {state.view === 'mes' && <MonthView state={state} set={set} appts={filtered} blocks={blocks} />}
+                  {state.view === 'equip' && <EquipmentView {...viewProps} />}
+                  {state.view === 'sala' && <RoomView {...viewProps} />}
+                  {state.view === 'programacao' && <ProgramacaoView {...viewProps} />}
+                </div>
+              </div>
+              {state.view !== 'mes' && (
+                <WaitlistDrawer entries={wl} appts={appts} blocks={blocks} date={state.date} open={wlOpen} setOpen={setWlOpen}
+                  onFit={startWlFit} onAdd={() => setWlEdit({})} onEdit={e => setWlEdit(e)}
+                  onRemove={e => { const pt = wlPatient(e); setWl(s => s.filter(x => x.id !== e.id)); flash(`${pt.name} removido da lista de espera`, { tone: 'danger', action: { label: 'Desfazer', onClick: () => { setWl(s => [...s, e]); setToast(null); } } }); }} />
+              )}
+            </div>
+            {/* painel de criação — empurra a agenda em vez de cobrir (desktop) */}
+            {booking && !compact && <BookingHost push init={booking.init} config={config} flow="drawer" compact={false} perms={PERMS} appts={appts} flash={flash}
+              onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft}
+              onBlock={ctx => { setBooking(null); setDraft(null); setBlockM({ ctx }); }} />}
           </div>
             </>}
         </main>
       </div>
 
       {/* overlays */}
+      {wlEdit && <WaitlistEntryModal e={wlEdit} onClose={() => setWlEdit(null)}
+        onSave={en => { setWl(s => s.some(x => x.id === en.id) ? s.map(x => x.id === en.id ? en : x) : [...s, en]); setWlEdit(null); setWlOpen(true); flash(wlEdit.id ? 'Entrada atualizada' : `${wlPatient(en).name} entrou na lista de espera`); }} />}
       {ctxCard && <ContextCard a={appts.find(x => x.id === ctxCard.a.id) || ctxCard.a} anchorRect={ctxCard.rect || { left: width / 2, right: width / 2, top: 120, bottom: 120 }} onClose={() => setCtxCard(null)}
         onReschedule={doReschedule} onCancel={doCancel} onOpen={openEdit} onRetorno={doRetorno} />}
       {quick && <QuickCreatePopover ctx={quick.ctx} anchorRect={quick.rect} onClose={() => { setQuick(null); setDraft(null); }} onMore={ctx => openBooking(ctx)} onSave={onQuickSave} onDraft={onDraft} />}
-      {booking && <BookingHost init={booking.init} config={config} flow={BOOKING_FLOW === 'two-tier' ? 'drawer' : BOOKING_FLOW} compact={compact} perms={PERMS} appts={appts} flash={flash} onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} />}
+      {booking && compact && <BookingHost init={booking.init} config={config} flow={BOOKING_FLOW === 'two-tier' ? 'drawer' : BOOKING_FLOW} compact={compact} perms={PERMS} appts={appts} flash={flash} onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} onBlock={ctx => { setBooking(null); setDraft(null); setBlockM({ ctx }); }} />}
       {cancel && <CancelModal a={cancel.a} onClose={() => setCancel(null)} onConfirm={confirmCancel} />}
       {blockM && <BlockModal ctx={blockM.ctx || {}} block={blockM.block} appts={appts}
         onClose={() => setBlockM(null)}

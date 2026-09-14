@@ -336,7 +336,8 @@ function WPopover({ anchorRect, onClose, children, width = 320, placement = 'aut
       if (left + w > vw - MARGIN) left = anchorRect.left - w - offset;
       if (left < MARGIN) left = Math.min(Math.max(MARGIN, anchorRect.left), vw - w - MARGIN);
       let top = anchorRect.top;
-      if (top + h > vh - MARGIN) top = Math.max(MARGIN, vh - MARGIN - h);
+      if (top + h > vh - MARGIN) top = vh - MARGIN - h;
+      if (top < MARGIN) top = MARGIN;
       el.style.left = left + 'px';
       el.style.top = top + 'px';
     };
@@ -352,7 +353,7 @@ function WPopover({ anchorRect, onClose, children, width = 320, placement = 'aut
   let left = anchorRect.right + offset;
   if (left + width > vw - MARGIN) left = anchorRect.left - width - offset;
   if (left < MARGIN) left = Math.min(Math.max(MARGIN, anchorRect.left), vw - width - MARGIN);
-  const top = Math.min(anchorRect.top, Math.max(MARGIN, vh - MARGIN - 220));
+  const top = Math.max(MARGIN, Math.min(anchorRect.top, Math.max(MARGIN, vh - MARGIN - 220)));
   return (
     <div ref={ref} style={{
       position: 'fixed', left, top, width, zIndex: 1000, background: '#fff',
