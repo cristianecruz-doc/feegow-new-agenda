@@ -189,28 +189,13 @@ function WTextarea({ label, value, onChange, placeholder, rows = 3, required, er
 }
 
 // ---- Select (native, styled) ------------------------------------------------
-// fit: o controle acompanha a opção ESCOLHIDA, não a mais longa da lista — para uma barra
-// apertada, onde o <select> só compensa se de fato ocupar menos que os botões que substitui.
-const W_SELECT_CHROME = 40; // padding do quadro (2×10) + calha da seta (18) + 2 de folga
-                            // — sem a folga o arredondamento do texto medido já corta em "…"
-function WSelect({ label, value, onChange, options, placeholder = 'Selecione…', required, error, size = 'm', fit, style = {} }) {
+function WSelect({ label, value, onChange, options, placeholder = 'Selecione…', required, error, size = 'm', style = {} }) {
   const [focus, setFocus] = React.useState(false);
   const bc = error ? WT.borderDanger : (focus ? WT.borderHi : WT.border);
   const h = size === 'l' ? 44 : 32;
   const opts = options.map(o => (typeof o === 'string' ? { value: o, label: o } : o));
-  // medida do rótulo atual num gêmeo invisível; observado em vez de calculado uma vez,
-  // então a troca de opção, de idioma e a chegada da webfont reajustam sozinhas
-  const ghostRef = React.useRef(null);
-  const [fitW, setFitW] = React.useState(0);
-  React.useEffect(() => {
-    const el = ghostRef.current; if (!el) return;
-    const ro = new ResizeObserver(() => setFitW(Math.ceil(el.getBoundingClientRect().width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [fit]);
-  const selLabel = (opts.find(o => o.value === value) || {}).label || placeholder;
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(fit && fitW ? { width: fitW + W_SELECT_CHROME } : null), ...style }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, ...style }}>
       {label && <WLabel required={required}>{label}</WLabel>}
       <span style={{
         position: 'relative', height: h, borderRadius: WT.rM, border: `1px solid ${bc}`, background: '#fff',
@@ -220,14 +205,11 @@ function WSelect({ label, value, onChange, options, placeholder = 'Selecione…'
         <select value={value} onChange={e => onChange && onChange(e.target.value)}
           onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
           style={{ appearance: 'none', WebkitAppearance: 'none', border: 'none', outline: 'none', background: 'transparent',
-            font: `${WT.wBody} 14px ${WT.font}`, color: value ? WT.fg : WT.muted, flex: 1, cursor: 'pointer', paddingRight: 18,
-            // o <select> nativo mede a opção mais longa; sem isto ele estoura a coluna estreita
-            minWidth: 0, textOverflow: 'ellipsis' }}>
+            font: `${WT.wBody} 14px ${WT.font}`, color: value ? WT.fg : WT.muted, flex: 1, cursor: 'pointer', paddingRight: 18 }}>
           {placeholder && <option value="">{placeholder}</option>}
           {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <WIcon name="chevron-down" size={16} style={{ position: 'absolute', right: 8, pointerEvents: 'none' }} />
-        {fit && <span ref={ghostRef} aria-hidden style={{ position: 'absolute', left: 0, top: 0, visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none', font: `${WT.wBody} 14px ${WT.font}` }}>{selLabel}</span>}
       </span>
       {error && <span style={{ fontSize: 12, color: WT.danger }}>{error}</span>}
     </label>
@@ -291,10 +273,10 @@ function WToggle({ checked, onChange, label }) {
 }
 
 // ---- Segmented control ------------------------------------------------------
-function WSegmented({ options, value, onChange, size = 'm', fullWidth }) {
+function WSegmented({ options, value, onChange, size = 'm' }) {
   const h = size === 'l' ? 38 : 32;
   return (
-    <div style={{ display: fullWidth ? 'flex' : 'inline-flex', background: '#fff', border: `1px solid ${WT.border}`, borderRadius: WT.rM, padding: 3, gap: 2, boxShadow: WT.shEmphasis }}>
+    <div style={{ display: 'inline-flex', background: '#fff', border: `1px solid ${WT.border}`, borderRadius: WT.rM, padding: 3, gap: 2, boxShadow: WT.shEmphasis }}>
       {options.map(o => {
         const opt = typeof o === 'string' ? { value: o, label: o } : o;
         const on = opt.value === value;
@@ -302,8 +284,7 @@ function WSegmented({ options, value, onChange, size = 'm', fullWidth }) {
           <button key={opt.value} onClick={() => onChange && onChange(opt.value)} style={{
             height: h - 8, padding: '0 12px', borderRadius: 5, border: 'none', cursor: 'pointer',
             fontFamily: WT.font, fontSize: 14, fontWeight: on ? WT.wEmph : WT.wBody,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            flex: fullWidth ? 1 : 'none',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
             background: on ? WT.accentSoft : 'transparent', color: on ? WT.accent : WT.fg2,
           }}>
             {opt.icon && <WIcon name={opt.icon} size={15} color={on ? WT.accent : WT.muted} />}
@@ -355,7 +336,8 @@ function WPopover({ anchorRect, onClose, children, width = 320, placement = 'aut
       if (left + w > vw - MARGIN) left = anchorRect.left - w - offset;
       if (left < MARGIN) left = Math.min(Math.max(MARGIN, anchorRect.left), vw - w - MARGIN);
       let top = anchorRect.top;
-      if (top + h > vh - MARGIN) top = Math.max(MARGIN, vh - MARGIN - h);
+      if (top + h > vh - MARGIN) top = vh - MARGIN - h;
+      if (top < MARGIN) top = MARGIN;
       el.style.left = left + 'px';
       el.style.top = top + 'px';
     };
@@ -371,7 +353,7 @@ function WPopover({ anchorRect, onClose, children, width = 320, placement = 'aut
   let left = anchorRect.right + offset;
   if (left + width > vw - MARGIN) left = anchorRect.left - width - offset;
   if (left < MARGIN) left = Math.min(Math.max(MARGIN, anchorRect.left), vw - width - MARGIN);
-  const top = Math.min(anchorRect.top, Math.max(MARGIN, vh - MARGIN - 220));
+  const top = Math.max(MARGIN, Math.min(anchorRect.top, Math.max(MARGIN, vh - MARGIN - 220)));
   return (
     <div ref={ref} style={{
       position: 'fixed', left, top, width, zIndex: 1000, background: '#fff',

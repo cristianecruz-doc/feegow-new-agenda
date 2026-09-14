@@ -3,7 +3,24 @@
 Interactive prototype of the redesigned Feegow agenda, exported from the
 [Claude Design project "Feegow Agenda redesign"](https://claude.ai/design/p/1cf7c9d1-0074-4aa1-a0e9-e94a5ffead33).
 
-**Live demo:** https://cristianecruz-doc.github.io/feegow-new-agenda/
+## Two live versions
+
+| URL | What it is | Owner |
+|-----|-----------|-------|
+| https://cristianecruz-doc.github.io/feegow-new-agenda/ | **Default** — mirrors the Claude Design project (currently: waitlist / Lista de espera) | design, synced by the `design-to-github-pages` skill |
+| https://cristianecruz-doc.github.io/feegow-new-agenda/designer/ | Dev build — the docked/minimizable booking side panel (PR #2) | dev (@rafalziolek) |
+
+The two diverged in August 2026: the side panel exists only in the dev build,
+the waitlist only in the design project. Keeping both URLs means neither branch
+of work overwrites the other while the team decides how to reconcile them
+(see PR #3).
+
+**Syncing rules**
+
+- A design sync overwrites the root (`index.html`, `src/`, `transicao/`, `assets/`)
+  and must never touch `designer/` or `olddesign/`.
+- `designer/` is a frozen copy of the dev version. To refresh it, copy the dev
+  files into the folder deliberately — it has no automatic updates.
 
 ## Running locally
 

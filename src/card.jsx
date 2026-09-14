@@ -309,13 +309,16 @@ function FreeSlot({ top, height, s, e, onClick }) {
 }
 
 // ---- Ghost (empty) slot -----------------------------------------------------
-function GhostSlot({ top, height, onClick, dropping, parallel, gutter = 0 }) {
+function GhostSlot({ top, height, onClick, dropping, parallel, gutter = 0, s, dur }) {
   const [hover, setHover] = React.useState(false);
+  const ref = React.useRef(null);
+  const fire = () => onClick(ref.current ? ref.current.getBoundingClientRect() : null);
+  const label = s != null ? `${fmtMin(s)}–${fmtMin(s + (dur || 0))}` : null;
   if (parallel) {
     // slot já ocupado — oferece criar em paralelo (mesmo horário) ocupando toda a linha livre.
     // zIndex baixo: os cards existentes (z4) cobrem onde estão; o realce aparece no espaço livre.
     return (
-      <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      <div ref={ref} onClick={fire} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         title="Criar agendamento no mesmo horário (paralelo)"
         style={{
           position: 'absolute', top, height, right: 2, width: Math.max(gutter, 20), borderRadius: WT.rM, cursor: 'pointer', zIndex: 5,
@@ -326,15 +329,24 @@ function GhostSlot({ top, height, onClick, dropping, parallel, gutter = 0 }) {
       </div>
     );
   }
+  const tall = height >= 34;
   return (
-    <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    <div ref={ref} onClick={fire} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{
-        position: 'absolute', top, height, left: 2, right: gutter + 2, borderRadius: WT.rM, cursor: 'pointer',
+        position: 'absolute', top, height, left: 2, right: gutter + 2, borderRadius: WT.rM, cursor: 'pointer', overflow: 'hidden',
         background: dropping ? WT.accentSoft : (hover ? WT.accentSoft : 'transparent'),
         border: dropping ? `1.5px dashed ${WT.borderAccent}` : (hover ? `1px dashed ${WT.borderAccent}` : '1px solid transparent'),
-        display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .1s',
+        display: 'flex', flexDirection: tall ? 'column' : 'row', alignItems: tall ? 'flex-start' : 'center', justifyContent: (hover || dropping) ? 'flex-start' : 'center',
+        gap: tall ? 1 : 6, padding: (hover || dropping) ? (tall ? '4px 9px' : '0 9px') : 0, transition: 'background .1s',
       }}>
-      {(hover || dropping) && <WIcon name="plus" size={15} color={WT.accent} />}
+      {(hover || dropping)
+        ? <>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: WT.wHead, color: WT.accent, fontFamily: WT.font, whiteSpace: 'nowrap' }}>
+              <WIcon name="plus" size={13} color={WT.accent} />Novo
+            </span>
+            {label && <span style={{ fontSize: 11, color: WT.accent, opacity: 0.85, fontFamily: WT.font, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{label}{dur ? ` · ${dur} min` : ''}</span>}
+          </>
+        : null}
     </div>
   );
 }
