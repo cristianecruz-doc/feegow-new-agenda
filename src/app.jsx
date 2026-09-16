@@ -29,28 +29,33 @@ function App() {
   applyAccent(ACCENT);
   const [tw, setTweak] = useTweaks(TWEAK_DEFAULTS);
   React.useLayoutEffect(() => { if (window.I18N) window.I18N.set(tw.lang); });
-  const mvp = tw.edition === 'mvp';
-  // #mvp / #final na URL (vindo do protótipo de transição) define a edição na abertura
+  const edition = tw.edition || 'final';
+  const mvp = edition !== 'final'; // MVP e Expansion escondem o que é exclusivo da Final
+  // #mvp / #expansion / #final na URL (vindo do protótipo de transição) define a edição na abertura
   React.useEffect(() => {
     const h = (window.location.hash || '').replace('#', '');
-    if ((h === 'mvp' || h === 'final') && h !== tw.edition) setTweak('edition', h);
+    if (['mvp', 'expansion', 'final'].includes(h) && h !== tw.edition) setTweak('edition', h);
   }, []);
   window.__mvp = mvp;
+  // capacidades por edição — Expansion = MVP + convênio + salas + equipamentos
+  window.__ed = { id: edition, conv: edition !== 'mvp', rooms: edition !== 'mvp', equip: edition !== 'mvp', final: edition === 'final' };
   // Configurações da Agenda (11 chaves legadas) — persistidas em localStorage
   const [cfg, setCfgState] = React.useState(cfgLoad);
   window.__cfg = cfg;
   const setCfg = patch => setCfgState(c => { const n = { ...c, ...patch }; cfgSave(n); return n; });
   const resetSection = keys => setCfgState(c => { const n = { ...c }; keys.forEach(k => { n[k] = CFG_DEFAULTS[k]; if (k === 'AlterarStatusAgendamento') n.AlterarStatusAgendamentoPara = CFG_DEFAULTS.AlterarStatusAgendamentoPara; }); cfgSave(n); flash('Seção restaurada para o padrão'); return n; });
-  // MVP: sem visão mensal/salas/programação/equipamentos → cai para Dia; limpa filtros de convênio/sala
+  // fora da Final: visões indisponíveis caem para Dia; filtros de convênio/sala limpam quando a edição não os tem
   React.useEffect(() => {
-    if (!mvp) return;
+    const ed = window.__ed;
     setApp(s => {
       const patch = {};
-      if (['mes', 'equip', 'sala', 'programacao'].includes(s.view)) patch.view = 'dia';
-      if ((s.filters.conv || []).length || (s.filters.room || []).length) patch.filters = { ...s.filters, conv: [], room: [] };
+      const blocked = ['mes', 'programacao'].concat(ed.equip ? [] : ['equip'], ed.rooms ? [] : ['sala']);
+      if (!ed.final && blocked.includes(s.view)) patch.view = 'dia';
+      if (!ed.conv && (s.filters.conv || []).length) patch.filters = { ...s.filters, conv: [] };
+      if (!ed.rooms && (s.filters.room || []).length) patch.filters = { ...(patch.filters || s.filters), room: [] };
       return Object.keys(patch).length ? { ...s, ...patch } : s;
     });
-  }, [mvp]);
+  }, [edition]);
 
 
   const [appts, setAppts] = React.useState(() => ALL_APPTS.map(a => ({ ...a })));
@@ -125,7 +130,7 @@ function App() {
   }
 
   // ---- create / update -----------------------------------------------------
-  function commitNew({ patient, procId, procIds, time, proId, date, equip, room, form, fitIn, payPlano, payConv }) {
+  function commitNew({ patient, procId, procIds, time, proId, date, equip, room, form, fitIn, payPlano, payConv, series, seriesRule, seriesSeq }) {
     const ids = (procIds && procIds.length) ? procIds : (procId ? [procId] : []);
     const proc = PROCS[ids[0]];
     const sumDur = ids.reduce((s, id) => s + ((PROCS[id] || {}).dur || 0), 0);
@@ -138,16 +143,58 @@ function App() {
       price: sumPrice, fitIn: !!fitIn, note: form && form.notas ? form.notas : null, equip: equip || null,
       channel: form ? form.canal : 'Balcão', room: room || (form ? form.local : null),
       _patientName: patient && patient.patientName, isNewPt: patient && patient.isNew,
+      series: series || null, seriesRule: seriesRule || null, seriesSeq: seriesSeq || null,
     };
     setAppts(s => [...s, na]);
     return na;
   }
+  // ---- série recorrente: valida cada ocorrência e pede confirmação quando há conflitos ----
+  const [rcPending, setRcPending] = React.useState(null); // { payload, ok[], skipped[], after }
+  function planSeries(payload) {
+    const rule = payload.recur; const proId = payload.proId || PROS[0].id; const time = payload.time;
+    const ids = (payload.procIds && payload.procIds.length) ? payload.procIds : (payload.procId ? [payload.procId] : []);
+    const dur = ids.reduce((s, id) => s + ((PROCS[id] || {}).dur || 0), 0) || gradeSlotAt(proId, payload.date || state.date, time);
+    const m = toMin(time);
+    const ok = [], skipped = [];
+    rcDates(payload.date || state.date, rule).forEach(d => {
+      const g = gradeAt(proId, d, time);
+      if (!g) { skipped.push({ date: d, why: 'sem grade do profissional neste horário' }); return; }
+      if (ids[0] && g.procs && !g.procs.includes(ids[0])) { skipped.push({ date: d, why: 'grade não atende o procedimento' }); return; }
+      const blk = blocks.some(b => blockOnDate(b, d) && blockCoversPro(b, proId) && m < toMin(b.end) && m + dur > toMin(b.start));
+      if (blk) { skipped.push({ date: d, why: 'bloqueio de agenda' }); return; }
+      const busy = appts.some(a => a.pro === proId && a.date === d && a.status !== 'cancelado' && m < toMin(a.start) + (a.dur || 0) && m + dur > toMin(a.start));
+      if (busy && !payload.fitIn) { skipped.push({ date: d, why: 'horário já ocupado' }); return; }
+      ok.push(d);
+    });
+    return { ok, skipped };
+  }
+  function commitSeries(payload, ok) {
+    const sid = uid(); let first = null;
+    ok.forEach((d, i) => { const na = commitNew({ ...payload, date: d, series: sid, seriesRule: payload.recur, seriesSeq: { i: i + 1, n: ok.length } }); if (!first) first = na; });
+    return first;
+  }
+  // cria 1 ou N (recorrente); devolve o primeiro agendamento ou null se aguardando confirmação
+  function createFromPayload(payload, after) {
+    if (!payload.recur) { const na = commitNew(payload); after && after(na, 1); return na; }
+    const { ok, skipped } = planSeries(payload);
+    if (!skipped.length) { const na = commitSeries(payload, ok); after && after(na, ok.length); return na; }
+    setRcPending({ payload, ok, skipped, after });
+    return null;
+  }
 
   const openBooking = init => { setQuick(null); setCtxCard(null); setBooking({ init }); };
+  const blockApi = {
+    onConfirm: info => {
+      if (info.id) { setBlocks(s => s.map(b => b.id === info.id ? { ...b, ...info } : b)); flash('Bloqueio atualizado'); }
+      else { setBlocks(s => [...s, { ...info, id: uid() }]); flash('Horário bloqueado'); }
+      setBooking(null); setDraft(null); setBlockM(null);
+    },
+    onDelete: b => { setBlocks(s => s.filter(x => x.id !== b.id)); setBooking(null); setBlockM(null); flash('Bloqueio excluído · horários liberados', { tone: 'danger' }); },
+  };
 
   function onCreate(kind) {
     const base = { date: state.date, time: '08:00', proId: app.dayPro };
-    if (kind === 'bloqueio') { setBlockM({ ctx: { proId: app.dayPro, date: state.date, time: '12:00' } }); return; }
+    if (kind === 'bloqueio') { openBooking({ ...base, time: '12:00', kind: 'bloqueio' }); return; }
     if (kind === 'encaixe') { openBooking({ ...base, fitIn: true }); return; }
     openBooking(base);
   }
@@ -181,19 +228,33 @@ function App() {
   const onDraft = patch => setDraft(d => d ? { ...d, ...patch } : d);
 
   function onQuickSave(payload) {
-    const na = commitNew(payload);
     setQuick(null); setDraft(null);
-    if (payload.wlId) setWl(s => s.filter(x => x.id !== payload.wlId));
-    const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
-    flash(`Agendamento criado · ${pt.name} ${na.start}${payload.wlId ? ' · saída da lista de espera' : ''}`);
+    createFromPayload(payload, (na, n) => {
+      if (payload.wlId) setWl(s => s.filter(x => x.id !== payload.wlId));
+      const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
+      flash(n > 1 ? `${n} agendamentos recorrentes criados · ${pt.name} ${na.start}` : `Agendamento criado · ${pt.name} ${na.start}${payload.wlId ? ' · saída da lista de espera' : ''}`);
+    });
   }
 
   function onBookingSave({ form, checkin }) {
     const patient = form.patient;
-    const na = commitNew({ patient, procIds: form.procIds, time: form.time, proId: form.proId, date: form.date, equip: form.equip || null, room: form.local, form: { ...form, _checkin: checkin }, fitIn: booking && booking.init && booking.init.fitIn });
+    const init = (booking && booking.init) || {};
+    // edição: aplica no escopo (esta / esta e seguintes / todas) mantendo a data de cada ocorrência
+    if (init.editing && init.appt) {
+      const ids = new Set(seriesTargets(init.appt, init.scope || 'one'));
+      const sumDur = form.procIds.reduce((s, id) => s + ((PROCS[id] || {}).dur || 0), 0);
+      const sumPrice = form.procIds.reduce((s, id) => s + ((PROCS[id] || {}).price || 0), 0);
+      setAppts(s => s.map(x => ids.has(x.id) ? { ...x, pro: form.proId, start: form.time, proc: form.procIds[0], procs: form.procIds, dur: sumDur || x.dur, price: sumPrice, room: form.local, note: form.notas || x.note, date: x.id === init.appt.id ? form.date : x.date, ...(x.id === init.appt.id && (init.scope || 'one') === 'one' && x.series ? { series: null, seriesRule: null, seriesSeq: null } : {}) } : x));
+      setBooking(null); setDraft(null);
+      const pt = patientById(init.appt.pt) || { name: 'Paciente' };
+      flash(ids.size > 1 ? `${ids.size} agendamentos da série atualizados` : `Agendamento atualizado · ${pt.name}`);
+      return;
+    }
     setBooking(null); setDraft(null);
-    const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
-    flash(checkin ? `Agendado e check-in feito · ${pt.name}` : `Agendamento salvo · ${pt.name} ${na.start}`);
+    createFromPayload({ patient, procIds: form.procIds, time: form.time, proId: form.proId, date: form.date, equip: form.equip || null, room: form.local, form: { ...form, _checkin: checkin }, fitIn: init.fitIn, recur: form.recur }, (na, n) => {
+      const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
+      flash(n > 1 ? `${n} agendamentos recorrentes criados · ${pt.name}` : checkin ? `Agendado e check-in feito · ${pt.name}` : `Agendamento salvo · ${pt.name} ${na.start}`);
+    });
   }
 
   // ---- context-card actions ------------------------------------------------
@@ -202,15 +263,22 @@ function App() {
     setCtxCard(null);
     const pt = patientById(a.pt) || {}; flash(`Check-in realizado · ${pt.name || 'paciente'}`);
   }
-  function doCancel(a) { setCtxCard(null); setCancel({ a }); }
+  function doCancel(a) { setCtxCard(null); if (a.series) { setRcScope({ verb: 'Cancelar', a, danger: true, then: scope => setCancel({ a, scope }) }); return; } setCancel({ a }); }
+  const [rcScope, setRcScope] = React.useState(null); // { verb, a, then(scope) }
+  function seriesTargets(a, scope) {
+    if (!a.series || scope === 'one') return [a.id];
+    return appts.filter(x => x.series === a.series && (scope === 'all' || x.date > a.date || (x.date === a.date && x.id === a.id))).map(x => x.id);
+  }
   function confirmCancel(info) {
     const a = cancel.a;
-    setAppts(s => s.map(x => x.id === a.id ? { ...x, status: 'cancelado', reason: info.label } : x));
+    const ids = new Set(seriesTargets(a, cancel.scope || 'one'));
+    setAppts(s => s.map(x => ids.has(x.id) && x.status !== 'cancelado' ? { ...x, status: 'cancelado', reason: info.label } : x));
     setCancel(null);
+    if (ids.size > 1) { flash(`${ids.size} agendamentos da série cancelados`, { tone: 'danger' }); wlOfferFreed(a); return; }
     if (a.paid && cfgGet('ContasAPagarCancelamento')) {
       flash(`Agendamento cancelado · conta a pagar de ${brl(a.price || 0)} criada no financeiro`, { tone: 'danger', dur: 4200 });
     } else flash('Agendamento cancelado · horário liberado', { tone: 'danger' });
-    wlOfferFreed(a);
+    if (!mvp) wlOfferFreed(a);
   }
   // horário liberado (cancelamento/falta): oferece quem está esperando por essa agenda
   function wlOfferFreed(a) {
@@ -263,7 +331,11 @@ function App() {
     setReschedule(null);
     flash(`Remarcado para ${fmtMin(min)}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? prev : x)); setToast(null); } } });
   }
-  function openEdit(a) { setCtxCard(null); openBooking({ editing: true, appt: a, date: a.date, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: (patientById(a.pt) || {}).name, isNew: false } }); }
+  function openEdit(a, scope) {
+    setCtxCard(null);
+    if (a.series && !scope) { setRcScope({ verb: 'Editar', a, then: sc => openEdit(a, sc) }); return; }
+    openBooking({ editing: true, scope: scope || 'one', appt: a, date: a.date, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: (patientById(a.pt) || {}).name, isNew: false } });
+  }
 
   // ---- drag reschedule -----------------------------------------------------
   const [drag, setDrag] = React.useState({ appt: null, colId: null, min: null });
@@ -333,7 +405,7 @@ function App() {
 
   // sinalização da lista de espera na grade (marca no horário livre + pill no cabeçalho da coluna)
   window.__waitHints = {
-    entries: wl, show: app.showWaitHints !== false && !reschedule,
+    entries: mvp ? [] : wl, show: !mvp && app.showWaitHints !== false && !reschedule,
     onOpenPro: () => setWlOpen(true),
     onAddFromBooking: seed => { setDraft(null); setWlEdit({ ...seed, pt: seed.pt || '', proc: seed.proc || 'derm', anyPro: true }); },
   };
@@ -359,7 +431,7 @@ function App() {
     flash(`${pt.name} agendado · ${dateUtil.fmtShortDate(date)} às ${fmtMin(min)}${pro.short ? ' · ' + pro.short : ''}`, { dur: 5000 });
   }
 
-  const viewProps = { state, set, appts: filtered, blocks, drag: dragApi, onSlotClick, onCardOpen: (a, rect) => setCtxCard({ a, rect }), onBlockOpen: b => setBlockM({ block: b }), onBlockPick: bs => setBlockPick(bs), draft };
+  const viewProps = { state, set, appts: filtered, blocks, drag: dragApi, onSlotClick, onCardOpen: (a, rect) => setCtxCard({ a, rect }), onBlockOpen: b => openBooking({ block: b, kind: 'bloqueio', date: b.date, time: b.start, proId: b.pro }), onBlockPick: bs => setBlockPick(bs), draft };
 
   // Seletor de agendas na barra lateral (só nas views multi-recurso Dia/Semana)
   const agendasInSidebar = app.agendasPlacement === 'sidebar';
@@ -412,7 +484,7 @@ function App() {
                   {state.view === 'programacao' && <ProgramacaoView {...viewProps} />}
                 </div>
               </div>
-              {state.view !== 'mes' && (
+              {state.view !== 'mes' && !mvp && (
                 <WaitlistDrawer entries={wl} appts={appts} blocks={blocks} date={state.date} open={wlOpen} setOpen={setWlOpen}
                   onFit={startWlFit} onAdd={() => setWlEdit({})} onEdit={e => setWlEdit(e)}
                   onRemove={e => { const pt = wlPatient(e); setWl(s => s.filter(x => x.id !== e.id)); flash(`${pt.name} removido da lista de espera`, { tone: 'danger', action: { label: 'Desfazer', onClick: () => { setWl(s => [...s, e]); setToast(null); } } }); }} />
@@ -420,30 +492,25 @@ function App() {
             </div>
             {/* painel de criação — empurra a agenda em vez de cobrir (desktop) */}
             {booking && !compact && <BookingHost push init={booking.init} config={config} flow="drawer" compact={false} perms={PERMS} appts={appts} flash={flash}
-              onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft}
-              onBlock={ctx => { setBooking(null); setDraft(null); setBlockM({ ctx }); }} />}
+              onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} blockApi={blockApi} />}
           </div>
             </>}
         </main>
       </div>
 
       {/* overlays */}
+      {rcScope && <RecurrenceScopeModal verb={rcScope.verb} a={rcScope.a} danger={rcScope.danger} total={appts.filter(x => x.series === rcScope.a.series && x.status !== 'cancelado').length}
+        onClose={() => setRcScope(null)} onConfirm={sc => { const t = rcScope.then; setRcScope(null); t(sc); }} />}
+      {rcPending && <RecurrenceConflictsModal ok={rcPending.ok} skipped={rcPending.skipped} onClose={() => setRcPending(null)}
+        onConfirm={() => { const p = rcPending; setRcPending(null); const na = commitSeries(p.payload, p.ok); p.after && na && p.after(na, p.ok.length); }} />}
       {wlEdit && <WaitlistEntryModal e={wlEdit} onClose={() => setWlEdit(null)}
         onSave={en => { setWl(s => s.some(x => x.id === en.id) ? s.map(x => x.id === en.id ? en : x) : [...s, en]); setWlEdit(null); setWlOpen(true); flash(wlEdit.id ? 'Entrada atualizada' : `${wlPatient(en).name} entrou na lista de espera`); }} />}
       {ctxCard && <ContextCard a={appts.find(x => x.id === ctxCard.a.id) || ctxCard.a} anchorRect={ctxCard.rect || { left: width / 2, right: width / 2, top: 120, bottom: 120 }} onClose={() => setCtxCard(null)}
         onReschedule={doReschedule} onCancel={doCancel} onOpen={openEdit} onRetorno={doRetorno} />}
       {quick && <QuickCreatePopover ctx={quick.ctx} anchorRect={quick.rect} onClose={() => { setQuick(null); setDraft(null); }} onMore={ctx => openBooking(ctx)} onSave={onQuickSave} onDraft={onDraft} />}
-      {booking && compact && <BookingHost init={booking.init} config={config} flow={BOOKING_FLOW === 'two-tier' ? 'drawer' : BOOKING_FLOW} compact={compact} perms={PERMS} appts={appts} flash={flash} onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} onBlock={ctx => { setBooking(null); setDraft(null); setBlockM({ ctx }); }} />}
+      {booking && compact && <BookingHost init={booking.init} config={config} flow={BOOKING_FLOW === 'two-tier' ? 'drawer' : BOOKING_FLOW} compact={compact} perms={PERMS} appts={appts} flash={flash} onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} blockApi={blockApi} />}
       {cancel && <CancelModal a={cancel.a} onClose={() => setCancel(null)} onConfirm={confirmCancel} />}
-      {blockM && <BlockModal ctx={blockM.ctx || {}} block={blockM.block} appts={appts}
-        onClose={() => setBlockM(null)}
-        onConfirm={info => {
-          if (info.id) { setBlocks(s => s.map(b => b.id === info.id ? { ...b, ...info } : b)); flash('Bloqueio atualizado'); }
-          else { setBlocks(s => [...s, { ...info, id: uid() }]); flash('Horário bloqueado'); }
-          setBlockM(null);
-        }}
-        onDelete={b => { setBlocks(s => s.filter(x => x.id !== b.id)); setBlockM(null); flash('Bloqueio excluído · horários liberados', { tone: 'danger' }); }} />}
-      {blockPick && <BlockChooser blocks={blockPick} onClose={() => setBlockPick(null)} onPick={b => { setBlockPick(null); setBlockM({ block: b }); }} />}
+      {blockPick && <BlockChooser blocks={blockPick} onClose={() => setBlockPick(null)} onPick={b => { setBlockPick(null); openBooking({ block: b, kind: 'bloqueio', date: b.date, time: b.start, proId: b.pro }); }} />}
       {dropError && <CenterModal
         title={dropError.kind === 'conv' ? 'Convênio não atendido' : 'Serviço não oferecido'}
         icon="alert-triangle" iconTone="danger" width={430} onClose={() => setDropError(null)}

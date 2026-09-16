@@ -49,6 +49,7 @@ function apptFlags(a, pt) {
   const out = [];
   if (prefs.newPatient !== false && pt && pt.firstVisit) out.push({ key: 'fv', icon: 'sparkles', label: '1ª vez', color: WT.accent });
   if (a.fitIn) out.push({ key: 'fit', icon: 'git-merge', label: 'Encaixe', color: WT.warning });
+  if (a.series) out.push({ key: 'rec', icon: 'repeat', label: `Recorrente · ${rcLabel(a.seriesRule)}`, color: WT.accent });
   if (a.paid) out.push({ key: 'paid', icon: 'banknote', label: 'Pago', color: WT.success });
   if (prefs.priority !== false && pt && pt.priority && PRIORITIES[pt.priority]) {
     const p = PRIORITIES[pt.priority];
@@ -140,7 +141,7 @@ function AppointmentCard({ ev, top, height, leftPct, widthPct, gutter = 0, cardS
   const start = toMin(a.start);
   const timeRange = `${fmtMin(start)} – ${fmtMin(start + a.dur)}`;
   const room = roomShort(effectiveRoom(a));
-  const showConv = !window.__mvp;
+  const showConv = !!(window.__ed && window.__ed.conv);
   const conv = a.plano ? a.conv : (a.price ? 'Particular' : 'Particular');
   const convTag = showConv ? (
     <span title={`Convênio · ${conv}`} style={{ flex: 'none', maxWidth: '46%', fontSize: 10.5, fontWeight: WT.wEmph, color: soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv}</span>
@@ -391,7 +392,7 @@ function StatusSelect({ a }) {
 function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel, onOpen, onRetorno }) {
   const pt = patientById(a.pt) || { name: a.pt };
   const t = apptColors(a); const st = STATUS[a.status];
-  const showRetorno = !cfgGet('OcultarBotaoRetorno');
+  const showRetorno = !cfgGet('OcultarBotaoRetorno') && !window.__mvp;
   const pro = PROS.find(p => p.id === a.pro) || EQUIP.find(e => e.id === a.pro) || {};
   const end = fmtMin(toMin(a.start) + a.dur);
   const Row = ({ icon, children }) => (
@@ -437,6 +438,7 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
                 </span>
               )}
               {a.fitIn && <WBadge type="warning" icon="git-merge">Encaixe</WBadge>}
+              {a.series && <WBadge type="accent" icon="repeat">Recorrente</WBadge>}
               {a.paid && <WBadge type="success" icon="banknote">Pago</WBadge>}
             </div>
           )}
@@ -445,6 +447,7 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
         {/* horário · procedimentos · profissional */}
         <Sec>
           <MetaRow icon="clock" right={`(${a.dur} min)`}>{fmtMin(toMin(a.start))} <span style={{ color: WT.muted }}>→</span> {end}</MetaRow>
+          {a.series && <MetaRow icon="repeat" right={a.seriesSeq ? `${a.seriesSeq.i}/${a.seriesSeq.n}` : null}>{rcLabel(a.seriesRule)}</MetaRow>}
           <div style={{ display: 'flex', gap: 10 }}>
             <WIcon name="stethoscope" size={15} color={WT.fg2} style={{ flex: 'none', marginTop: 3 }} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -468,7 +471,7 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
 
         {/* convênio · cobrança */}
         <Sec>
-          {!window.__mvp && <MetaRow icon="shield-check">{a.conv}{a.plano ? '' : ' (particular)'}</MetaRow>}
+          {window.__ed && window.__ed.conv && <MetaRow icon="shield-check">{a.conv}{a.plano ? '' : ' (particular)'}</MetaRow>}
           <MetaRow icon="banknote">{a.price ? brl(a.price) : 'Sem cobrança'}</MetaRow>
         </Sec>
 

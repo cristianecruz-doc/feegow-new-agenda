@@ -101,6 +101,7 @@ function EditionMenu({ edition, onEdition }) {
   }, [open]);
   const opts = [
     { value: 'final', label: 'Final' },
+    { value: 'expansion', label: 'Expansion', hint: 'MVP + convênio, salas e equipamentos' },
     { value: 'mvp', label: 'MVP' },
     { value: 'legado', label: 'Legado', hint: 'Agenda atual · transição', href: 'legado.html' },
   ];

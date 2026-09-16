@@ -84,7 +84,8 @@ function ZoomStepper({ value, onChange }) {
 function Toolbar({ state, set, onNew, compact }) {
   const { view, date, filters, freeOnly, weekMode } = state;
   const mvp = !!window.__mvp;
-  const viewOpts = mvp ? VIEW_OPTS.filter(v => v.value === 'dia' || v.value === 'semana') : VIEW_OPTS;
+  const ed = window.__ed || { final: true, conv: true, rooms: true, equip: true };
+  const viewOpts = ed.final ? VIEW_OPTS : VIEW_OPTS.filter(v => v.value === 'dia' || v.value === 'semana' || (v.value === 'equip' && ed.equip) || (v.value === 'sala' && ed.rooms));
   const [pop, setPop] = React.useState(null); // {kind, rect}
   const [fq, setFq] = React.useState('');      // busca dentro do popover de filtros
   const open = (kind, rect) => setPop(p => (p && p.kind === kind ? null : { kind, rect }));
@@ -214,8 +215,8 @@ function Toolbar({ state, set, onNew, compact }) {
             {fProOpts.length > 0 && <CheckList title="Profissionais" options={fProOpts} selected={arr('pros')} onToggle={v => toggleFilter('pros', v)} onClear={() => clearFilter('pros')} />}
             {fSpecs.length > 0 && <><WDivider /><CheckList title="Especialidade" options={fSpecs} selected={arr('spec')} onToggle={v => toggleFilter('spec', v)} onClear={() => clearFilter('spec')} /></>}
             {fUnits.length > 0 && <><WDivider /><CheckList title="Unidade" options={fUnits} selected={arr('unit')} onToggle={v => toggleFilter('unit', v)} onClear={() => clearFilter('unit')} /></>}
-            {fConv.length > 0 && !mvp && <><WDivider /><CheckList title="Convênio" options={fConv} selected={arr('conv')} onToggle={v => toggleFilter('conv', v)} onClear={() => clearFilter('conv')} /></>}
-            {fRooms.length > 0 && !mvp && <><WDivider /><CheckList title="Sala" options={fRooms} selected={arr('room')} onToggle={v => toggleFilter('room', v)} onClear={() => clearFilter('room')} /></>}
+            {fConv.length > 0 && ed.conv && <><WDivider /><CheckList title="Convênio" options={fConv} selected={arr('conv')} onToggle={v => toggleFilter('conv', v)} onClear={() => clearFilter('conv')} /></>}
+            {fRooms.length > 0 && ed.rooms && <><WDivider /><CheckList title="Sala" options={fRooms} selected={arr('room')} onToggle={v => toggleFilter('room', v)} onClear={() => clearFilter('room')} /></>}
             {fProcs.length > 0 && <><WDivider /><CheckList title={ql ? 'Procedimento' : 'Procedimento · mais usados'} options={fProcs.map(p => ({ value: p.id, label: p.name }))} selected={arr('proc')} onToggle={v => toggleFilter('proc', v)} onClear={() => clearFilter('proc')} />{procMore > 0 && <div style={{ padding: '0 16px 8px', fontSize: 12, color: WT.muted }}>Digite para buscar entre todos os procedimentos (+{procMore}).</div>}</>}
           </div>
         </WPopover>

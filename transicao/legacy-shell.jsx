@@ -45,6 +45,7 @@ function LEditionMenu() {
   }, [open]);
   const opts = [
     { value: 'final', label: 'Final', href: 'index.html#final' },
+    { value: 'expansion', label: 'Expansion', href: 'index.html#expansion' },
     { value: 'mvp', label: 'MVP', href: 'index.html#mvp' },
     { value: 'legado', label: 'Legado', hint: 'Agenda atual · transição' },
   ];

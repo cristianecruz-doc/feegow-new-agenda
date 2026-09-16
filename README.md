@@ -22,6 +22,19 @@ of work overwrites the other while the team decides how to reconcile them
 - `designer/` is a frozen copy of the dev version. To refresh it, copy the dev
   files into the folder deliberately — it has no automatic updates.
 
+**Local patches (re-apply after every sync)**
+
+Upstream copies overwrite these, so each sync must put them back:
+
+1. `transicao/legacy-shell.jsx` — edition hrefs `New Agenda.html#…` → `index.html#…`
+   (one per edition: `#final`, `#expansion`, `#mvp`).
+2. `src/shell.jsx` — Legado href → `legado.html`.
+3. `src/recurrence.jsx` line 30 — `(rule.dow || []).slice()` →
+   `(Array.isArray(rule.dow) ? rule.dow : []).slice()`. **Crash fix**: the monthly
+   preset passes `dow` as a number (`{freq:'month', nth, dow: 3}`) while `rcLabel`
+   unconditionally treats it as an array, so picking "Mensal na(o) …" white-screens
+   the whole prototype. Fix it in the Claude Design project to retire this patch.
+
 ## Running locally
 
 Static site — serve the folder over HTTP (Babel loads the JSX modules via fetch,

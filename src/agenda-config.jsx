@@ -19,14 +19,16 @@ const CFG_DEFAULTS = {
   AlterarStatusAgendamentoPara: 'faltou',
   ContasAPagarCancelamento: false,
 };
-// Configurações que existem já no MVP / V0.1 (as demais só valem na versão Final)
+// Configurações que existem já no MVP / V0.1; Expansion soma a carteirinha de convênio; as demais só valem na Final
 const CFG_MVP = ['NaoExibirNaAgendaOsStatus', 'ColorirLinhaAgendamento', 'OcultarBotaoRetorno', 'CPFBuscaPaciente', 'PermitirRemarcarSemGrade'];
+const CFG_EXPANSION = [...CFG_MVP, 'validadeconveniovencido'];
+const cfgAllowed = key => { const ed = window.__ed; if (!ed || ed.final) return true; return (ed.id === 'expansion' ? CFG_EXPANSION : CFG_MVP).includes(key); };
 const CFG_LS = 'feegow.agendaCfg';
 
 // Leitura efetiva: no MVP as configurações exclusivas da Final não têm efeito algum.
 function cfgGet(key) {
   const d = CFG_DEFAULTS[key];
-  if (window.__mvp && !CFG_MVP.includes(key)) return d;
+  if (!cfgAllowed(key)) return d;
   const c = window.__cfg || {};
   return c[key] === undefined ? d : c[key];
 }
@@ -215,7 +217,7 @@ function AgendaConfigPage({ cfg, setCfg, resetSection, onBack, onSimulateDayEnd 
   const mvp = !!window.__mvp;
   const [q, setQ] = React.useState('');
   const ql = q.trim().toLowerCase();
-  const all = cfgSettings().filter(s => !(mvp && s.final));
+  const all = cfgSettings().filter(s => cfgAllowed(s.key));
   const match = s => !ql || (s.title + ' ' + s.desc).toLowerCase().includes(ql);
   const api = { onSimulateDayEnd };
 
@@ -236,7 +238,7 @@ function AgendaConfigPage({ cfg, setCfg, resetSection, onBack, onSimulateDayEnd 
             <WInput value={q} onChange={setQ} placeholder="Buscar configuração…" prefixIcon="search" size="l" />
           </div>
           <span style={{ fontSize: 12.5, color: WT.muted }}>
-            {mvp ? '5 configurações nesta versão (MVP · V0.1)' : '11 configurações · 6 chegam na versão Final'}
+            {window.__ed && window.__ed.id === 'mvp' ? '5 configurações nesta versão (MVP · V0.1)' : window.__ed && window.__ed.id === 'expansion' ? '6 configurações nesta versão (Expansion · V0.2)' : '11 configurações · 6 chegam na versão Final'}
           </span>
         </div>
 

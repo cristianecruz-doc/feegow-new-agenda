@@ -64,7 +64,7 @@ function CancelModal({ a, onClose, onConfirm }) {
   );
 }
 
-function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
+function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete, embedded }) {
   const editing = !!block;
   const perms = block ? blockEditable(block) : { edit: true, del: false };
   const readOnly = editing && !perms.edit;
@@ -139,8 +139,7 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
         <WButton variant="primary" label={editing ? (perms.confirm && confirmFeriado ? 'Confirmar edição' : 'Salvar') : 'Bloquear'} onClick={submit} />
       </>;
 
-  return (
-    <CenterModal title={editing ? 'Bloqueio' : 'Novo bloqueio'} icon="ban" iconTone="danger" width={520} onClose={onClose} footer={footer}>
+  const body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {perms.note && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: WT.rM, background: readOnly ? WT.inset : WT.warningSoft, border: `1px solid ${readOnly ? WT.border : '#e8d27a'}`, fontSize: 12, color: readOnly ? WT.fg2 : WT.warning }}>
@@ -226,6 +225,17 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete }) {
           </div>
         )}
       </div>
+  );
+  // embutido no painel lateral de criação (sem modal): corpo rolável + rodapé fixo
+  if (embedded) return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>{body}</div>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: 14, borderTop: `1px solid ${WT.border}`, background: WT.raised }}>{footer}</div>
+    </div>
+  );
+  return (
+    <CenterModal title={editing ? 'Bloqueio' : 'Novo bloqueio'} icon="ban" iconTone="danger" width={520} onClose={onClose} footer={footer}>
+      {body}
     </CenterModal>
   );
 }

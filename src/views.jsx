@@ -542,6 +542,7 @@ function buildResourceColumn(res, appts, blocks, date, conf) {
 
 function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date }) {
   const forDate = date || TODAY;
+  const edE = !window.__ed || window.__ed.equip, edR = !window.__ed || window.__ed.rooms;
   const has = (kind, id) => selected.some(r => r.kind === kind && r.id === id);
   const showPros = !only || only.includes('pro');
   const showEquip = !only || only.includes('equip');
@@ -637,10 +638,10 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date })
                 </div>
               )}
               <Group title="Profissionais" items={fPros} kind="pro" />
-              {fEquip.length > 0 && <WDivider />}
-              <Group title="Equipamentos" items={fEquip} kind="equip" />
-              {fRooms.length > 0 && <WDivider />}
-              <Group title="Salas / consultórios" items={fRooms} kind="room" />
+              {edE && fEquip.length > 0 && <WDivider />}
+              {edE && <Group title="Equipamentos" items={fEquip} kind="equip" />}
+              {edR && fRooms.length > 0 && <WDivider />}
+              {edR && <Group title="Salas / consultórios" items={fRooms} kind="room" />}
             </>}
       </div>
     </WPopover>
