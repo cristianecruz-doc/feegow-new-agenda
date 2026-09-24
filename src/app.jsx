@@ -114,7 +114,12 @@ function App() {
     const st = STATUS[status] || {};
     flash(`Status: ${st.label || status}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? { ...x, status: prev } : x)); setToast(null); } } });
   };
-  const filtered = filterAppts(appts, app.filters).filter(a => !cfgHiddenStatuses().includes(a.status));
+  // cancelados saem da grade e vivem no pill "Cancelados" da barra (abre a lista + agendamento completo)
+  const filtered = filterAppts(appts, app.filters).filter(a => !cfgHiddenStatuses().includes(a.status) && a.status !== 'cancelado');
+  const cancelledDay = React.useMemo(() => {
+    const inWeek = app.view === 'semana' ? new Set(dateUtil.weekDaysOf(app.date, app.weekHideWeekend ? 5 : 6)) : null;
+    return filterAppts(appts, app.filters).filter(a => a.status === 'cancelado' && !a.deleted && (inWeek ? inWeek.has(a.date) : a.date === app.date)).sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
+  }, [appts, app.filters, app.date, app.view, app.weekHideWeekend]);
 
   // ---- slot resolution -----------------------------------------------------
   function resolveSlot(colId) {
@@ -404,6 +409,8 @@ function App() {
   // (waiting-list / Sala de espera feature lives in a separate project — not part of the agenda)
 
   // sinalização da lista de espera na grade (marca no horário livre + pill no cabeçalho da coluna)
+  // duração do agendamento em remarcação / marcação da lista → o cue "Livre" limita a escolha do horário para caber
+  window.__freeDur = reschedule ? (reschedule.a.dur || 0) : wlFit ? ((PROCS[wlFit.e.proc] || {}).dur || 0) : 0;
   window.__waitHints = {
     entries: mvp ? [] : wl, show: !mvp && app.showWaitHints !== false && !reschedule,
     onOpenPro: () => setWlOpen(true),
@@ -448,7 +455,7 @@ function App() {
             ? <AgendaConfigPage cfg={cfg} onBack={() => set({ page: 'agenda' })} resetSection={resetSection} onSimulateDayEnd={simulateDayEnd}
                 setCfg={patch => { setCfg(patch); flash('Configuração salva'); }} />
             : <>
-          <Toolbar state={state} set={set} compact={compact}
+          <Toolbar state={state} set={set} compact={compact} cancelled={cancelledDay} onOpenAppt={ap => openEdit(ap)}
             onNew={() => openBooking({ date: state.date, time: '08:00', proId: app.dayPro })} />
           {reschedule && (() => { const rp = patientById(reschedule.a.pt) || { name: reschedule.a._patientName || 'Paciente' }; return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: WT.accentSoft, borderBottom: `1px solid ${WT.borderAccent}`, flex: 'none' }}>

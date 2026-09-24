@@ -31,14 +31,25 @@ function FilterChip({ icon, label, value, active, onClick, anchorId }) {
   );
 }
 
-function CheckList({ title, options, selected, onToggle, onClear }) {
-  const values = options.map(o => (typeof o === 'string' ? o : o.value));
+// lista de filtro: mostra 5 (selecionados primeiro) + "Mostrar mais"; sem rolagem interna (uma única rolagem no popover).
+// cap: teto mesmo expandido (profissionais) — acima disso, só pela busca.
+function CheckList({ title, options: allOpts, selected, onToggle, onClear, count, searching, cap }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const norm = allOpts.map(o => (typeof o === 'string' ? { value: o, label: o } : o));
+  const ordered = searching ? norm : [...norm.filter(o => selected.includes(o.value)), ...norm.filter(o => !selected.includes(o.value))];
+  const nSel = norm.filter(o => selected.includes(o.value)).length;
+  const limit = searching ? ordered.length : Math.max(nSel, expanded ? (cap || ordered.length) : 5);
+  const options = ordered.slice(0, limit);
+  const hiddenCount = ordered.length - options.length;
+  const canExpand = !searching && !expanded && hiddenCount > 0;
+  const searchOnly = !searching && expanded && hiddenCount > 0;
+  const values = options.map(o => o.value);
   const allOn = values.length > 0 && values.every(v => selected.includes(v));
   const toggleAll = () => { if (allOn) onClear(); else values.forEach(v => { if (!selected.includes(v)) onToggle(v); }); };
   return (
-    <div style={{ padding: 8, maxHeight: 320, overflow: 'auto' }}>
+    <div style={{ padding: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '4px 8px 8px' }}>
-        <span style={{ flex: 1, fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>{title}</span>
+        <span style={{ flex: 1, fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>{title}{count != null && <span style={{ fontWeight: WT.wBody, color: WT.muted }}> ({count})</span>}</span>
         <button onClick={toggleAll} style={{ background: 'none', border: 'none', color: WT.accent, fontSize: 12, fontWeight: WT.wEmph, cursor: 'pointer', fontFamily: WT.font }}>{allOn ? 'Limpar' : 'Selecionar todos'}</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -59,6 +70,9 @@ function CheckList({ title, options, selected, onToggle, onClear }) {
           );
         })}
       </div>
+      {canExpand && <button onClick={() => setExpanded(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: '4px 0 0', padding: '4px 8px', border: 'none', background: 'none', cursor: 'pointer', fontFamily: WT.font, fontSize: 12.5, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="chevron-down" size={14} color={WT.accent} />Mostrar mais ({hiddenCount})</button>}
+      {expanded && !searching && <button onClick={() => setExpanded(false)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: '4px 0 0', padding: '4px 8px', border: 'none', background: 'none', cursor: 'pointer', fontFamily: WT.font, fontSize: 12.5, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="chevron-up" size={14} color={WT.accent} />Mostrar menos</button>}
+      {searchOnly && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px 2px', fontSize: 12, color: WT.muted }}><WIcon name="search" size={12} color={WT.muted} />Mais {hiddenCount} — busque pelo nome para encontrar</div>}
     </div>
   );
 }
@@ -81,7 +95,7 @@ function ZoomStepper({ value, onChange }) {
   );
 }
 
-function Toolbar({ state, set, onNew, compact }) {
+function Toolbar({ state, set, onNew, compact, cancelled = [], onOpenAppt }) {
   const { view, date, filters, freeOnly, weekMode } = state;
   const mvp = !!window.__mvp;
   const ed = window.__ed || { final: true, conv: true, rooms: true, equip: true };
@@ -142,9 +156,8 @@ function Toolbar({ state, set, onNew, compact }) {
   const fConv = CONVENIOS.filter(matchq);
   const fUnits = UNITS.filter(matchq);
   const fRooms = rooms.filter(matchq);
-  // procedimentos: sem busca → top 10 mais usados; com busca → todos os que casam
-  const fProcs = ql ? procsByUse.filter(p => matchq(p.name)) : procsByUse.slice(0, 10);
-  const procMore = !ql && procsByUse.length > 10 ? procsByUse.length - 10 : 0;
+  // procedimentos: ordenados por uso; lista mostra 5, "Mostrar mais" até 10, o resto pela busca
+  const fProcs = ql ? procsByUse.filter(p => matchq(p.name)) : procsByUse;
   const noResults = ql && !fProOpts.length && !fSpecs.length && !fConv.length && !fUnits.length && !fRooms.length && !fProcs.length;
 
   return (
@@ -163,6 +176,16 @@ function Toolbar({ state, set, onNew, compact }) {
         {!compact && dateLabel}
         <WIcon name="chevron-down" size={14} />
       </button>
+
+      {/* cancelados do período — fora da grade; o pill mostra só a quantidade */}
+      {cancelled.length > 0 && view !== 'mes' && (
+        <button onClick={e => open('cancel', e.currentTarget.getBoundingClientRect())} title="Agendamentos cancelados neste período" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 10px', borderRadius: WT.pill, marginLeft: 4,
+          border: `1px solid ${pop && pop.kind === 'cancel' ? WT.borderHover : WT.border}`, background: pop && pop.kind === 'cancel' ? WT.inset : '#fff', cursor: 'pointer', fontFamily: WT.font, fontSize: 12.5, fontWeight: WT.wEmph, color: WT.fg2, whiteSpace: 'nowrap',
+        }}>
+          <WIcon name="x-circle" size={14} color={WT.muted} />{cancelled.length} {compact ? '' : (cancelled.length === 1 ? 'cancelado' : 'cancelados')}
+        </button>
+      )}
 
       <div style={{ flex: 1 }} />
 
@@ -185,6 +208,33 @@ function Toolbar({ state, set, onNew, compact }) {
 
       <WIconButton name="sliders-horizontal" title="Configurações de visualização" active={pop && pop.kind === 'viewcfg'} onClick={e => open('viewcfg', e.currentTarget.getBoundingClientRect())} />
 
+      {pop && pop.kind === 'cancel' && (
+        <WPopover anchorRect={pop.rect} onClose={close} width={340} placement="below">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 8px', borderBottom: `1px solid ${WT.borderSub}` }}>
+            <WIcon name="x-circle" size={15} color={WT.muted} />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: WT.wHead, color: WT.fg }}>Cancelados</span>
+            <span style={{ fontSize: 12, color: WT.muted }}>{view === 'semana' ? 'nesta semana' : 'neste dia'}</span>
+          </div>
+          <div style={{ maxHeight: 320, overflow: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {cancelled.map(a => {
+              const pt = patientById(a.pt) || { name: a._patientName || 'Paciente' };
+              const pro = PROS.find(p => p.id === a.pro) || {};
+              const procs = ((a.procs && a.procs.length) ? a.procs : (a.proc ? [a.proc] : [])).map(id => (PROCS[id] || {}).name).filter(Boolean).join(', ');
+              return (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 8px', borderRadius: WT.rM }}
+                  onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <span style={{ flex: 'none', fontSize: 12, fontWeight: WT.wHead, color: WT.fg2, fontVariantNumeric: 'tabular-nums', width: view === 'semana' ? 74 : 38 }}>{view === 'semana' ? `${dateUtil.fmtShortDate(a.date)} ${a.start}` : a.start}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: WT.wEmph, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: 'line-through', textDecorationColor: WT.muted }}>{pt.name}</span>
+                    <span style={{ display: 'block', fontSize: 11.5, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[procs, pro.short, a.reason].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  <WButton size="s" variant="default" label="Abrir" onClick={() => { close(); onOpenAppt && onOpenAppt(a); }} />
+                </div>
+              );
+            })}
+          </div>
+        </WPopover>
+      )}
       {pop && pop.kind === 'cal' && (
         <WPopover anchorRect={pop.rect} onClose={close} width={260} placement="below">
           <div style={{ borderBottom: `1px solid ${WT.borderSub}`, padding: '4px 4px 0' }} />
@@ -212,12 +262,12 @@ function Toolbar({ state, set, onNew, compact }) {
               </div>
             )}
             {noResults && <div style={{ padding: '20px 12px', fontSize: 13, color: WT.muted, textAlign: 'center' }}>Nenhum resultado para “{fq}”.</div>}
-            {fProOpts.length > 0 && <CheckList title="Profissionais" options={fProOpts} selected={arr('pros')} onToggle={v => toggleFilter('pros', v)} onClear={() => clearFilter('pros')} />}
-            {fSpecs.length > 0 && <><WDivider /><CheckList title="Especialidade" options={fSpecs} selected={arr('spec')} onToggle={v => toggleFilter('spec', v)} onClear={() => clearFilter('spec')} /></>}
-            {fUnits.length > 0 && <><WDivider /><CheckList title="Unidade" options={fUnits} selected={arr('unit')} onToggle={v => toggleFilter('unit', v)} onClear={() => clearFilter('unit')} /></>}
-            {fConv.length > 0 && ed.conv && <><WDivider /><CheckList title="Convênio" options={fConv} selected={arr('conv')} onToggle={v => toggleFilter('conv', v)} onClear={() => clearFilter('conv')} /></>}
-            {fRooms.length > 0 && ed.rooms && <><WDivider /><CheckList title="Sala" options={fRooms} selected={arr('room')} onToggle={v => toggleFilter('room', v)} onClear={() => clearFilter('room')} /></>}
-            {fProcs.length > 0 && <><WDivider /><CheckList title={ql ? 'Procedimento' : 'Procedimento · mais usados'} options={fProcs.map(p => ({ value: p.id, label: p.name }))} selected={arr('proc')} onToggle={v => toggleFilter('proc', v)} onClear={() => clearFilter('proc')} />{procMore > 0 && <div style={{ padding: '0 16px 8px', fontSize: 12, color: WT.muted }}>Digite para buscar entre todos os procedimentos (+{procMore}).</div>}</>}
+            {fProOpts.length > 0 && <CheckList searching={!!ql} title="Profissionais" count={eligiblePros.length} cap={PRO_LIST_LIMIT} options={fProOpts} selected={arr('pros')} onToggle={v => toggleFilter('pros', v)} onClear={() => clearFilter('pros')} />}
+            {fSpecs.length > 0 && <><WDivider /><CheckList searching={!!ql} title="Especialidade" options={fSpecs} selected={arr('spec')} onToggle={v => toggleFilter('spec', v)} onClear={() => clearFilter('spec')} /></>}
+            {fUnits.length > 0 && <><WDivider /><CheckList searching={!!ql} title="Unidade" options={fUnits} selected={arr('unit')} onToggle={v => toggleFilter('unit', v)} onClear={() => clearFilter('unit')} /></>}
+            {fConv.length > 0 && ed.conv && <><WDivider /><CheckList searching={!!ql} title="Convênio" options={fConv} selected={arr('conv')} onToggle={v => toggleFilter('conv', v)} onClear={() => clearFilter('conv')} /></>}
+            {fRooms.length > 0 && ed.rooms && <><WDivider /><CheckList searching={!!ql} title="Sala" options={fRooms} selected={arr('room')} onToggle={v => toggleFilter('room', v)} onClear={() => clearFilter('room')} /></>}
+            {fProcs.length > 0 && <><WDivider /><CheckList searching={!!ql} title={ql ? 'Procedimento' : 'Procedimento · mais usados'} cap={10} options={fProcs.map(p => ({ value: p.id, label: p.name }))} selected={arr('proc')} onToggle={v => toggleFilter('proc', v)} onClear={() => clearFilter('proc')} /></>}
           </div>
         </WPopover>
       )}

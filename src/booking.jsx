@@ -468,7 +468,7 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
             <div style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 26 }}><WIcon name="info" size={13} color={WT.accent} />Novo cadastro — preencha os dados exigidos pela clínica.</div>
           )}
           {errors._contact && <div style={{ fontSize: 12, color: WT.danger, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 26 }}><WIcon name="alert-circle" size={12} color={WT.danger} />{errors._contact}</div>}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, paddingLeft: 26 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8, paddingLeft: 26 }}>
             {patientFieldsToRender.map(f => (
               <PatientField key={f} name={f} value={form.paciente[f]} onChange={v => updPac(f, v)} required={requiredSet.has(f)} error={errors['pac_' + f]} />
             ))}
@@ -476,19 +476,21 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
         </Section>
 
         <Section icon="clipboard-list" title="Detalhes da visita">
-          <IRow icon="id-card" title="Profissional"><WSelect value={form.proId} onChange={v => upd({ proId: v, local: PROS.find(p => p.id === v)?.room })} options={PROS.map(p => ({ value: p.id, label: `${p.name} · ${p.spec}` }))} placeholder="" style={{ flex: 1 }} /></IRow>
+          <IRow icon="id-card" title="Profissional"><WSelect value={form.proId} onChange={v => upd({ proId: v, local: PROS.find(p => p.id === v)?.room })} options={PROS.map(p => ({ value: p.id, label: `${p.name} · ${p.spec}` }))} placeholder="" style={{ flex: 1, minWidth: 0 }} /></IRow>
           <IRow icon="calendar" title="Data e horário">
-            <WInput type="date" value={form.date} onChange={v => upd({ date: v })} error={errors.date} style={{ flex: 1.4 }} />
-            <WInput value={form.time} onChange={v => upd({ time: v })} suffixIcon="clock" error={errors.time} style={{ flex: 1 }} />
+            <WInput type="date" value={form.date} onChange={v => upd({ date: v })} error={errors.date} style={{ flex: 1.4, minWidth: 0 }} />
+            <WInput value={form.time} onChange={v => upd({ time: v })} suffixIcon="clock" error={errors.time} style={{ flex: 1, minWidth: 0 }} />
           </IRow>
-          <IRow icon="door-open" title="Local / sala"><WSelect value={form.local} onChange={v => upd({ local: v })} options={ROOMS.map(r => r.name)} error={errors.local} placeholder="" style={{ flex: 1 }} /></IRow>
+          {window.__mvp
+            ? <IRow icon="door-open" title="Local / sala (definido pela grade)"><span style={{ flex: 1, minWidth: 0, fontSize: 13, color: WT.fg2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{form.local || '—'}</span></IRow>
+            : <IRow icon="door-open" title="Local / sala"><WSelect value={form.local} onChange={v => upd({ local: v })} options={ROOMS.map(r => r.name)} error={errors.local} placeholder="" style={{ flex: 1, minWidth: 0 }} /></IRow>}
           <IRow icon="stethoscope" title="Procedimentos"><div style={{ flex: 1, minWidth: 0 }}><ProcMultiSelect compact required value={form.procIds} onChange={setProcs} error={errors.procIds} options={PROC_LIST} /></div></IRow>
           {form.procIds.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 26 }}><WIcon name="clock" size={12} color={WT.muted} /><span style={{ fontSize: 11.5, color: WT.muted }}>Duração total {totalDur} min · cor pelo 1º procedimento</span></div>}
           {!window.__mvp && !init.editing && <IRow icon="repeat" title="Repetição"><RecurrenceSelect bare date={form.date} value={form.recur} onChange={v => upd({ recur: v })} /></IRow>}
           {init.editing && init.appt && init.appt.series && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: WT.fg2, paddingLeft: 26 }}><WIcon name="repeat" size={14} color={WT.accent} />{rcLabel(init.appt.seriesRule)} · {init.scope === 'all' ? 'editando toda a série' : init.scope === 'following' ? 'editando esta e as seguintes' : 'editando só esta ocorrência'}</div>}
           {window.__ed && window.__ed.equip && ((showEquip || form.equip || reqEquipId)
             ? <IRow icon="wrench" title="Equipamento">
-                <WSelect value={form.equip} onChange={v => upd({ equip: v })} options={[{ value: '', label: 'Nenhum' }, ...EQUIP.map(e => ({ value: e.id, label: e.name }))]} placeholder="Vincular equipamento…" style={{ flex: 1 }} />
+                <WSelect value={form.equip} onChange={v => upd({ equip: v })} options={[{ value: '', label: 'Nenhum' }, ...EQUIP.map(e => ({ value: e.id, label: e.name }))]} placeholder="Vincular equipamento…" style={{ flex: 1, minWidth: 0 }} />
                 {reqEquipId
                   ? <WIcon name="info" size={14} color={WT.accent} title="Equipamento exigido pelo procedimento selecionado" />
                   : <WIconButton name="x" dim={28} title="Remover equipamento" onClick={() => { upd({ equip: '' }); setShowEquip(false); }} />}
@@ -498,15 +500,15 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
 
         <Section icon="banknote" title="Pagamento">
           {edConv && <WSegmented value={form.plano ? 'convenio' : 'particular'} onChange={v => upd({ plano: v === 'convenio' })} options={[{ value: 'convenio', label: 'Convênio' }, { value: 'particular', label: 'Particular' }]} />}
-          {edConv && form.plano && <IRow icon="shield-check" title="Convênio"><WSelect value={form.convenio} onChange={v => upd({ convenio: v })} options={CONVENIOS.filter(c => c !== 'Particular')} error={errors.convenio} placeholder="Convênio" style={{ flex: 1 }} /></IRow>}
-          {edConv && form.plano && <IRow icon="id-card" title="Carteirinha"><WInput value={form.paciente.Matricula1 || ''} onChange={v => updPac('Matricula1', v)} placeholder="Matrícula / carteirinha" error={errors.pac_Matricula1} style={{ flex: 1 }} /></IRow>}
-          {(!edConv || !form.plano) && showTabela && <IRow icon="table" title="Tabela particular"><WSelect value={form.tabela} onChange={v => upd({ tabela: v })} options={TABELA_OPTS} error={errors.tabela} placeholder="Tabela particular" style={{ flex: 1 }} /></IRow>}
-          {(!edConv || !form.plano) && <IRow icon="banknote" title="Valor"><WInput value={form.valor} onChange={v => upd({ valor: v })} placeholder="Valor (R$)" error={errors.valor} style={{ flex: 1 }} /></IRow>}
+          {edConv && form.plano && <IRow icon="shield-check" title="Convênio"><WSelect value={form.convenio} onChange={v => upd({ convenio: v })} options={CONVENIOS.filter(c => c !== 'Particular')} error={errors.convenio} placeholder="Convênio" style={{ flex: 1, minWidth: 0 }} /></IRow>}
+          {edConv && form.plano && <IRow icon="id-card" title="Carteirinha"><WInput value={form.paciente.Matricula1 || ''} onChange={v => updPac('Matricula1', v)} placeholder="Matrícula / carteirinha" error={errors.pac_Matricula1} style={{ flex: 1, minWidth: 0 }} /></IRow>}
+          {(!edConv || !form.plano) && showTabela && <IRow icon="table" title="Tabela particular"><WSelect value={form.tabela} onChange={v => upd({ tabela: v })} options={TABELA_OPTS} error={errors.tabela} placeholder="Tabela particular" style={{ flex: 1, minWidth: 0 }} /></IRow>}
+          {(!edConv || !form.plano) && <IRow icon="banknote" title="Valor"><WInput value={form.valor} onChange={v => upd({ valor: v })} placeholder="Valor (R$)" error={errors.valor} style={{ flex: 1, minWidth: 0 }} /></IRow>}
         </Section>
 
         <Section icon="git-branch" title="Origem e observações">
-          <IRow icon="megaphone" title="Canal de origem"><WSelect value={form.canal} onChange={v => upd({ canal: v })} options={CHANNELS} placeholder="" style={{ flex: 1 }} /></IRow>
-          <IRow icon="sticky-note" title="Observações"><WTextarea value={form.notas} onChange={v => upd({ notas: v })} rows={2} placeholder="Observações internas, preparo…" style={{ flex: 1 }} /></IRow>
+          <IRow icon="megaphone" title="Canal de origem"><WSelect value={form.canal} onChange={v => upd({ canal: v })} options={CHANNELS} placeholder="" style={{ flex: 1, minWidth: 0 }} /></IRow>
+          <IRow icon="sticky-note" title="Observações"><WTextarea value={form.notas} onChange={v => upd({ notas: v })} rows={2} placeholder="Observações internas, preparo…" style={{ flex: 1, minWidth: 0 }} /></IRow>
         </Section>
 
         {init.appt && <NotificationsSection appt={init.appt} />}
@@ -529,19 +531,24 @@ function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms }) {
     { id: 'historico',   label: 'Histórico',   icon: 'list', disabled: !hasPatient || isNewPt, hint: 'Disponível após selecionar/salvar o paciente' },
     { id: 'conta',       label: 'Conta',       icon: 'wallet', disabled: !perms.verConta || !hasPatient || isNewPt, hint: !perms.verConta ? 'Você não tem permissão para ver a conta' : 'Disponível após selecionar/salvar o paciente' },
   ];
+  // botões (não abas): no agendamento mostra Ficha · Histórico · Conta; fora dele, "Agendamento" volta ao formulário
+  const shown = tabs.filter(t => t.id !== 'agendamento' || tab !== 'agendamento');
   return (
-    <div role="tablist" style={{ display: 'flex', gap: 2, padding: '0 12px', borderBottom: `1px solid ${WT.border}`, background: WT.raised, flex: 'none', overflowX: 'auto' }}>
-      {tabs.map(t => {
+    <div style={{ display: 'flex', gap: 6, padding: '4px 16px 10px', borderBottom: `1px solid ${WT.borderSub}`, background: WT.raised, flex: 'none' }}>
+      {shown.map(t => {
         const active = tab === t.id;
         return (
-          <button key={t.id} role="tab" aria-selected={active} disabled={t.disabled} title={t.disabled ? t.hint : undefined}
+          <button key={t.id} aria-pressed={active} disabled={t.disabled} title={t.disabled ? t.hint : undefined}
             onClick={() => { if (!t.disabled) setTab(t.id); }}
+            onMouseEnter={e => { if (!t.disabled && !active) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (!active) e.currentTarget.style.background = '#fff'; }}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, height: 44, padding: '0 12px', border: 'none', background: 'transparent',
-              cursor: t.disabled ? 'not-allowed' : 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: active ? WT.wHead : WT.wEmph, whiteSpace: 'nowrap',
-              color: t.disabled ? WT.placeholder : (active ? WT.accent : WT.fg2), borderBottom: `2px solid ${active ? WT.accentFill : 'transparent'}`, marginBottom: -1,
+              flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30, padding: '0 8px', borderRadius: WT.rM,
+              border: `1px solid ${active ? WT.borderAccent : WT.border}`, background: active ? WT.accentSoft : '#fff', boxShadow: active ? 'none' : WT.shEmphasis,
+              cursor: t.disabled ? 'not-allowed' : 'pointer', fontFamily: WT.font, fontSize: 13, fontWeight: WT.wEmph, whiteSpace: 'nowrap',
+              color: t.disabled ? WT.placeholder : (active ? WT.accent : WT.fg),
             }}>
-            <WIcon name={t.icon} size={16} color={t.disabled ? WT.placeholder : (active ? WT.accent : WT.muted)} />{t.label}
+            <WIcon name={t.id === 'agendamento' ? 'arrow-left' : t.icon} size={14} color={t.disabled ? WT.placeholder : (active ? WT.accent : WT.muted)} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
           </button>
         );
       })}

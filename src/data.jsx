@@ -21,7 +21,24 @@ const PROS = [
   { id: 'p3', name: 'Dra. Camila Souza',   short: 'Camila S.',   initials: 'CS', spec: 'Cardiologia',   room: 'Consultório 3 · Sabiá',      unit: 'Unidade Centro',   color: '#a23a7a', doctoralia: true },
   { id: 'p4', name: 'Dr. Felipe Moreira',  short: 'Felipe M.', initials: 'FM', spec: 'Clínico Geral',  room: 'Consultório 4 · Tucano',     unit: 'Unidade Zona Sul', color: '#b06400' },
   { id: 'p5', name: 'Dra. Patrícia Lima',  short: 'Patrícia L.',    initials: 'PL', spec: 'Pediatria',     room: 'Consultório 5 · Colibri',    unit: 'Unidade Zona Sul', color: '#0e7aa0', doctoralia: true },
+  { id: 'p6', name: 'Dr. André Siqueira', short: 'André S.', initials: 'AS', spec: 'Clínico Geral', room: 'Consultório 6', unit: 'Unidade Centro', color: '#5a6b7a' },
+  { id: 'p7', name: 'Dra. Beatriz Nogueira', short: 'Beatriz N.', initials: 'BN', spec: 'Ginecologia', room: 'Consultório 7', unit: 'Unidade Zona Sul', color: '#8a4b9c' },
+  { id: 'p8', name: 'Dr. Carlos Menezes', short: 'Carlos M.', initials: 'CM', spec: 'Urologia', room: 'Consultório 8', unit: 'Unidade Centro', color: '#2f6f8f' },
+  { id: 'p9', name: 'Dra. Daniela Freitas', short: 'Daniela F.', initials: 'DF', spec: 'Endocrinologia', room: 'Consultório 9', unit: 'Unidade Zona Sul', color: '#9a5a1a' },
+  { id: 'p10', name: 'Dr. Eduardo Pacheco', short: 'Eduardo P.', initials: 'EP', spec: 'Neurologia', room: 'Consultório 10', unit: 'Unidade Centro', color: '#4a5aa8' },
+  { id: 'p11', name: 'Dra. Fernanda Rocha', short: 'Fernanda R.', initials: 'FR', spec: 'Psiquiatria', room: 'Consultório 11', unit: 'Unidade Zona Sul', color: '#7a4a6a' },
+  { id: 'p12', name: 'Dr. Gustavo Lopes', short: 'Gustavo L.', initials: 'GL', spec: 'Oftalmologia', room: 'Consultório 12', unit: 'Unidade Centro', color: '#1f7a6a' },
+  { id: 'p13', name: 'Dra. Helena Barros', short: 'Helena B.', initials: 'HB', spec: 'Reumatologia', room: 'Consultório 13', unit: 'Unidade Zona Sul', color: '#a0463a' },
+  { id: 'p14', name: 'Dr. Igor Cavalcanti', short: 'Igor C.', initials: 'IC', spec: 'Gastroenterologia', room: 'Consultório 14', unit: 'Unidade Centro', color: '#6a7a2a' },
+  { id: 'p15', name: 'Dra. Juliana Prado', short: 'Juliana P.', initials: 'JP', spec: 'Nutrologia', room: 'Consultório 15', unit: 'Unidade Zona Sul', color: '#3a7aa0' },
+  { id: 'p16', name: 'Dr. Leonardo Ribas', short: 'Leonardo R.', initials: 'LR', spec: 'Otorrinolaringologia', room: 'Consultório 16', unit: 'Unidade Centro', color: '#7a5a3a' },
+  { id: 'p17', name: 'Dra. Mariana Teles', short: 'Mariana T.', initials: 'MT', spec: 'Pneumologia', room: 'Consultório 17', unit: 'Unidade Zona Sul', color: '#5a3aa0' },
+  { id: 'p18', name: 'Dr. Nelson Aguiar', short: 'Nelson A.', initials: 'NA', spec: 'Geriatria', room: 'Consultório 18', unit: 'Unidade Centro', color: '#3a6a4a' },
+  { id: 'p19', name: 'Dra. Olívia Martins', short: 'Olívia M.', initials: 'OM', spec: 'Mastologia', room: 'Consultório 19', unit: 'Unidade Zona Sul', color: '#a03a6a' },
+  { id: 'p20', name: 'Dr. Rafael Quintana', short: 'Rafael Q.', initials: 'RQ', spec: 'Angiologia', room: 'Consultório 20', unit: 'Unidade Centro', color: '#2a5a7a' },
 ];
+// listas de profissionais mostram só os primeiros N; os demais aparecem ao buscar pelo nome
+const PRO_LIST_LIMIT = 10;
 // especialidades de um profissional (array) + label "primeira +X"
 const specsOf = pro => (pro && pro.specs && pro.specs.length ? pro.specs : (pro && pro.spec ? [pro.spec] : []));
 const specLabel = pro => { const l = specsOf(pro); return l.length > 1 ? `${l[0]} +${l.length - 1}` : (l[0] || ''); };
@@ -552,3 +569,5 @@ Object.assign(window, {
   apptProcIds, apptProcList, apptDurSum, apptPriceSum, apptProcLabel,
   NOTIF_CHANNELS, NOTIF_STATUS, apptNotifications, notifSummary, fmtNotifWhen,
 });
+
+window.PRO_LIST_LIMIT = PRO_LIST_LIMIT;

@@ -287,13 +287,24 @@ function IntervalCard({ top, height, label, start, end }) {
 }
 
 // ---- Free-slot highlight ("somente horários livres") -----------------------
-function FreeSlot({ top, height, s, e, onClick }) {
+// pxPerMin + dur: o cursor escolhe o horário exato dentro da faixa (snap 5 min, limitado para caber a duração)
+function FreeSlot({ top, height, s, e, onClick, pxPerMin, dur = 0 }) {
   const [hover, setHover] = React.useState(false);
+  const [pick, setPick] = React.useState(null); // minuto sob o cursor
   const ref = React.useRef(null);
   const tall = height >= 40;
+  const maxStart = Math.max(s, e - dur);
+  const snap = ev => {
+    if (!pxPerMin) return s;
+    const y = ev.clientY - ref.current.getBoundingClientRect().top;
+    const m = s + Math.round((y / pxPerMin) / 5) * 5;
+    return Math.min(maxStart, Math.max(s, m));
+  };
+  const precise = pxPerMin && maxStart > s;
   return (
-    <button ref={ref} onClick={() => onClick(ref.current.getBoundingClientRect())}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    <button ref={ref} onClick={ev => onClick(ref.current.getBoundingClientRect(), precise ? snap(ev) : s)}
+      onMouseMove={ev => { if (precise) setPick(snap(ev)); }}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPick(null); }}
       style={{
         position: 'absolute', top, height: Math.max(height, 16), left: 3, right: 3, zIndex: 3, textAlign: 'left',
         background: hover ? WT.accentSoftHover : WT.accentSoft, border: `1.5px solid ${WT.borderAccent}`,
@@ -305,6 +316,11 @@ function FreeSlot({ top, height, s, e, onClick }) {
         <WIcon name="plus" size={13} color={WT.accent} /> Livre
       </span>
       <span style={{ fontSize: 11, color: WT.accent, opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>{fmtMin(s)}–{fmtMin(e)} · {e - s} min</span>
+      {pick != null && (
+        <span style={{ position: 'absolute', left: 0, right: 0, top: (pick - s) * pxPerMin, height: dur ? Math.max(dur * pxPerMin, 2) : 2, background: dur ? '#006a5926' : WT.accent, borderTop: `2px solid ${WT.accent}`, borderRadius: 3, pointerEvents: 'none' }}>
+          <span style={{ position: 'absolute', right: 6, top: -1, transform: 'translateY(-100%)', background: WT.accent, color: '#fff', fontSize: 11, fontWeight: WT.wHead, padding: '1px 6px', borderRadius: 4, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtMin(pick)}{dur ? `–${fmtMin(pick + dur)}` : ''}</span>
+        </span>
+      )}
     </button>
   );
 }
