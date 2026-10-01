@@ -261,8 +261,8 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
             ? coverRanges.flatMap(([cs, ce]) => freeGaps(appts, (blocks || []).concat(intervals), cs, ce))
             : freeGaps(appts, (blocks || []).concat(intervals), startMin, endMin)))
       ).map(([s, e], i) => (
-        <FreeSlot key={'free' + i} top={(s - startMin) * pxPerMin} height={(e - s) * pxPerMin - 3} s={s} e={e} pxPerMin={pxPerMin} dur={window.__freeDur || 0}
-          onClick={(rect, min) => onSlotClick(colId, min != null ? min : s, rect)} />
+        <FreeSlot key={'free' + i} top={(s - startMin) * pxPerMin} height={(e - s) * pxPerMin - 3} s={s} e={e}
+          onClick={rect => onSlotClick(colId, s, rect)} />
       ))}
 
       {/* column not bookable for the current filter — muted, no clicks */}
@@ -542,7 +542,6 @@ function buildResourceColumn(res, appts, blocks, date, conf) {
 
 function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date }) {
   const forDate = date || TODAY;
-  const edE = !window.__ed || window.__ed.equip, edR = !window.__ed || window.__ed.rooms;
   const has = (kind, id) => selected.some(r => r.kind === kind && r.id === id);
   const showPros = !only || only.includes('pro');
   const showEquip = !only || only.includes('equip');
@@ -574,18 +573,14 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date })
   const toAdd = found.filter(r => !has(r.kind, r.id));
   const total = fPros.length + fEquip.length + fRooms.length;
 
-  const Group = ({ title, items: all, kind, count }) => {
-    if (all.length === 0) return null;
-    // profissionais: sem busca mostra só os primeiros N (selecionados primeiro); o resto aparece buscando
-    const limited = kind === 'pro' && !ql && all.length > PRO_LIST_LIMIT;
-    const items = limited ? [...all.filter(it => has(kind, it.id)), ...all.filter(it => !has(kind, it.id))].slice(0, Math.max(PRO_LIST_LIMIT, all.filter(it => has(kind, it.id)).length)) : all;
-    const more = limited ? all.length - items.length : 0;
+  const Group = ({ title, items, kind }) => {
+    if (items.length === 0) return null;
     const allOn = items.every(it => has(kind, it.id));
     const toggleAll = () => items.forEach(it => { if (has(kind, it.id) === allOn) onToggle({ kind, id: it.id }); });
     return (
     <div style={{ padding: '6px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px' }}>
-        <span style={{ flex: 1, fontSize: 11, fontWeight: WT.wEmph, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>{title}{count != null && <span style={{ textTransform: 'none', letterSpacing: 0 }}> ({count})</span>}</span>
+        <span style={{ flex: 1, fontSize: 11, fontWeight: WT.wEmph, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>{title}</span>
         <button onClick={toggleAll} style={{ background: 'none', border: 'none', color: WT.accent, fontSize: 12, fontWeight: WT.wEmph, cursor: 'pointer', fontFamily: WT.font, padding: 0 }}>{allOn ? 'Limpar' : 'Selecionar todos'}</button>
       </div>
       {items.map(it => { const on = has(kind, it.id); const subtitle = kind === 'pro' ? specLabel(it) : it.spec; return (
@@ -596,7 +591,6 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date })
           <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 13, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.short || it.name}</span><span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: WT.muted, minWidth: 0 }}><WIcon name={kind === 'pro' ? 'stethoscope' : 'tag'} size={10} color={WT.muted} style={{ flex: 'none' }} /><span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</span></span></span>
         </button>
       ); })}
-      {more > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px 2px', fontSize: 12, color: WT.muted }}><WIcon name="search" size={12} color={WT.muted} />Mais {more} — busque pelo nome para encontrar</div>}
     </div>
   );
   };
@@ -642,11 +636,11 @@ function ResourcePicker({ selected, onToggle, onClose, anchorRect, only, date })
                   {(fPros.length > 0 || fEquip.length > 0 || fRooms.length > 0) && <WDivider />}
                 </div>
               )}
-              <Group title="Profissionais" items={fPros} kind="pro" count={PROS.length} />
-              {edE && fEquip.length > 0 && <WDivider />}
-              {edE && <Group title="Equipamentos" items={fEquip} kind="equip" />}
-              {edR && fRooms.length > 0 && <WDivider />}
-              {edR && <Group title="Salas / consultórios" items={fRooms} kind="room" />}
+              <Group title="Profissionais" items={fPros} kind="pro" />
+              {fEquip.length > 0 && <WDivider />}
+              <Group title="Equipamentos" items={fEquip} kind="equip" />
+              {fRooms.length > 0 && <WDivider />}
+              <Group title="Salas / consultórios" items={fRooms} kind="room" />
             </>}
       </div>
     </WPopover>

@@ -68,7 +68,7 @@ function ProcMultiSelect({ value, onChange, options, error, label, required, hin
 }
 
 // ---- Patient autocomplete ---------------------------------------------------
-function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus, compact }) {
+function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus, compact, locked }) {
   const H = compact ? 32 : 44;
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
@@ -91,7 +91,7 @@ function PatientAutocomplete({ value, onSelect, onNew, error, autoFocus, compact
             </div>
             {sel.phone && <div style={{ fontSize: 12, color: WT.muted }}>{sel.phone}{cfgGet('CPFBuscaPaciente') && sel.id ? ` · CPF ${cpfOf(sel)}` : ''}</div>}
           </div>
-          <WIconButton name="x" dim={28} onClick={() => { onSelect(null); setQ(''); setOpen(true); }} />
+          {!locked && <WIconButton name="x" dim={28} onClick={() => { onSelect(null); setQ(''); setOpen(true); }} />}
         </div>
       </div>
     );
@@ -462,8 +462,16 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
           </div>
         )}
 
+        {init.readOnly && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', borderRadius: WT.rM, background: WT.inset, border: `1px solid ${WT.border}`, fontSize: 13, color: WT.fg2, lineHeight: 1.45 }}>
+            <div style={{ display: 'flex', gap: 8 }}><WIcon name="lock" size={15} color={WT.fg2} style={{ flex: 'none', marginTop: 2 }} /><span>{init.readOnly}</span></div>
+            {init.onLinkedNew && <div><WButton variant="default" size="s" leadingIcon="link" label="Novo agendamento vinculado" onClick={init.onLinkedNew} /></div>}
+          </div>
+        )}
+        {init.linkedFrom && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: WT.fg2 }}><WIcon name="link" size={14} color={WT.accent} />Vinculado ao agendamento de {dateUtil.fmtShortDate(init.linkedFrom.date)} às {init.linkedFrom.start}</div>}
+        <fieldset disabled={!!init.readOnly} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, opacity: init.readOnly ? 0.7 : 1 }}>
         <Section icon="user-round" title="Paciente">
-          <IRow icon="user-round" title="Paciente"><div style={{ flex: 1, minWidth: 0 }}><PatientAutocomplete compact value={form.patient} onSelect={p => upd({ patient: p })} onNew={name => upd({ patient: { patientName: name, isNew: true } })} error={errors.patient} /></div></IRow>
+          <IRow icon="user-round" title="Paciente"><div style={{ flex: 1, minWidth: 0 }}><PatientAutocomplete compact locked={!!init.editing} value={form.patient} onSelect={p => upd({ patient: p })} onNew={name => upd({ patient: { patientName: name, isNew: true } })} error={errors.patient} /></div></IRow>
           {form.patient && form.patient.isNew && (
             <div style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 26 }}><WIcon name="info" size={13} color={WT.accent} />Novo cadastro — preencha os dados exigidos pela clínica.</div>
           )}
@@ -510,21 +518,25 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
           <IRow icon="megaphone" title="Canal de origem"><WSelect value={form.canal} onChange={v => upd({ canal: v })} options={CHANNELS} placeholder="" style={{ flex: 1, minWidth: 0 }} /></IRow>
           <IRow icon="sticky-note" title="Observações"><WTextarea value={form.notas} onChange={v => upd({ notas: v })} rows={2} placeholder="Observações internas, preparo…" style={{ flex: 1, minWidth: 0 }} /></IRow>
         </Section>
+        </fieldset>
 
         {init.appt && <NotificationsSection appt={init.appt} />}
       </div>
 
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: 14, borderTop: `1px solid ${WT.border}`, background: WT.raised }}>
-        <WButton variant="default" label="Cancelar" onClick={onCancel} />
+        <WButton variant="default" label={init.readOnly ? 'Fechar' : 'Cancelar'} onClick={onCancel} />
         <span style={{ flex: 1 }} />
-        <WButton variant="primary" leadingIcon="check" label="Salvar" onClick={() => submit(false)} />
+        {!init.readOnly && <WButton variant="primary" leadingIcon="check" label="Salvar" onClick={() => submit(false)} />}
       </div>
     </div>
   );
 }
 
 // ---- Patient tab bar (Agendamento · Ficha · Histórico · Conta) --------------
-function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms }) {
+// MVP: Ficha · Histórico · Conta abrem a tela do paciente no Feegow legado (sem edição pelo agendamento)
+const legacyPatientUrl = pid => `https://app.feegow.com/main/?P=Pacientes&I=${String(pid || '').replace(/\D/g, '') || pid}&Pers=1`;
+function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms, pid }) {
+  const legacy = !!window.__mvp;
   const tabs = [
     { id: 'agendamento', label: 'Agendamento', icon: 'calendar-days' },
     { id: 'ficha',       label: 'Ficha',       icon: 'user-round' },
@@ -538,8 +550,8 @@ function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms }) {
       {shown.map(t => {
         const active = tab === t.id;
         return (
-          <button key={t.id} aria-pressed={active} disabled={t.disabled} title={t.disabled ? t.hint : undefined}
-            onClick={() => { if (!t.disabled) setTab(t.id); }}
+          <button key={t.id} aria-pressed={active} disabled={t.disabled} title={t.disabled ? t.hint : legacy && t.id !== 'agendamento' ? 'Abre a tela do paciente no Feegow (nova aba)' : undefined}
+            onClick={() => { if (t.disabled) return; if (legacy && t.id !== 'agendamento') { window.open(legacyPatientUrl(pid), '_blank', 'noopener'); return; } setTab(t.id); }}
             onMouseEnter={e => { if (!t.disabled && !active) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (!active) e.currentTarget.style.background = '#fff'; }}
             style={{
               flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30, padding: '0 8px', borderRadius: WT.rM,
@@ -549,6 +561,7 @@ function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms }) {
             }}>
             <WIcon name={t.id === 'agendamento' ? 'arrow-left' : t.icon} size={14} color={t.disabled ? WT.placeholder : (active ? WT.accent : WT.muted)} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
+            {legacy && t.id !== 'agendamento' && <WIcon name="external-link" size={12} color={WT.muted} style={{ flex: 'none' }} />}
           </button>
         );
       })}
@@ -614,7 +627,7 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
   // Ficha / Histórico / Conta só existem depois de escolher o paciente
   React.useEffect(() => { if (!hasPatient && tab !== 'agendamento') setTab('agendamento'); }, [hasPatient]);
   const _perms = perms || { editFicha: true, verConta: true };
-  const title = kind === 'bloqueio' ? (init.block ? 'Bloqueio' : 'Novo bloqueio') : kind === 'encaixe' ? 'Novo encaixe' : (init.editing ? 'Editar agendamento' : 'Novo agendamento');
+  const title = kind === 'bloqueio' ? (init.block ? 'Bloqueio' : 'Novo bloqueio') : kind === 'encaixe' ? 'Novo encaixe' : (init.readOnly ? 'Agendamento' : init.editing ? 'Editar agendamento' : 'Novo agendamento');
   const ptName = pObj ? pObj.name : (patient && patient.patientName);
 
   const editing = !!init.editing && !!init.appt;
@@ -651,7 +664,7 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
       <div style={{ flex: 'none', width: pw, maxWidth: '50%', display: 'flex', flexDirection: 'column', background: WT.raised, borderLeft: `1px solid ${WT.border}`, minWidth: 0, minHeight: 0, overflow: 'hidden', transition: 'width .2s ease', animation: 'drawerIn .2s ease' }}>
         {Header}
         {KindBar}
-        {hasPatient && kind !== 'bloqueio' && <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} />}
+        {hasPatient && kind !== 'bloqueio' && <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} pid={pid} />}
         {body}
         {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}
       </div>
@@ -675,7 +688,7 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
       }}>
         {Header}
         {KindBar}
-        {hasPatient && kind !== 'bloqueio' && <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} />}
+        {hasPatient && kind !== 'bloqueio' && <PatientTabBar tab={tab} setTab={setTab} hasPatient={hasPatient} isNewPt={isNewPt} perms={_perms} pid={pid} />}
         {body}
       </div>
       {showAudit && editing && <AuditTrailDrawer appt={init.appt} compact={compact} onClose={() => setShowAudit(false)} />}

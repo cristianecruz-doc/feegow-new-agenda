@@ -82,10 +82,10 @@ function StatusSmartTag({ a, size = 'm', onOpenMenu, mono }) {
           <div onMouseDown={e => e.stopPropagation()} style={{ position: 'fixed', top: Math.min((rect ? rect.bottom : 0) + 5, window.innerHeight - 320), left: Math.min(rect ? rect.left : 0, window.innerWidth - 210), width: 196, maxHeight: 316, overflow: 'auto', background: WT.raised, border: `1px solid ${WT.border}`, borderRadius: WT.rM, boxShadow: WT.shPopout, padding: 5, fontFamily: WT.font }}>
             <div style={{ fontSize: 10.5, fontWeight: WT.wHead, color: WT.muted, textTransform: 'uppercase', letterSpacing: '.04em', padding: '4px 8px 6px' }}>Alterar status</div>
             {STATUS_ORDER.map(key => {
-              const s = STATUS[key]; const active = key === a.status;
+              const s = STATUS[key]; const active = key === a.status; const why = !active && window.ruleStatusWhy ? ruleStatusWhy(a, key) : null;
               return (
-                <button key={key} onClick={e => choose(e, key)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', border: 'none', borderRadius: WT.rS, background: active ? WT.hover : 'transparent', cursor: 'pointer', fontFamily: WT.font }}
+                <button key={key} onClick={e => choose(e, key)} title={why || undefined} aria-disabled={!!why}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', border: 'none', borderRadius: WT.rS, background: active ? WT.hover : 'transparent', cursor: why ? 'not-allowed' : 'pointer', fontFamily: WT.font, opacity: why ? 0.45 : 1 }}
                   onMouseEnter={e => { if (!active) e.currentTarget.style.background = WT.hover; }}
                   onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
                   <WIcon name={s.icon} size={14} color={s.fg} strokeWidth={2.2} style={{ flex: 'none' }} />
@@ -151,7 +151,7 @@ function AppointmentCard({ ev, top, height, leftPct, widthPct, gutter = 0, cardS
   return (
     <button
       ref={ref}
-      draggable={!cancelled}
+      draggable={!cancelled && !(window.ruleNoDrag && ruleNoDrag(a))}
       onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart(a); }}
       onDragEnd={onDragEnd}
       onClick={open}
@@ -386,10 +386,10 @@ function StatusSelect({ a }) {
         <div style={{ position: 'fixed', inset: 0, zIndex: 4000 }} onMouseDown={e => { e.stopPropagation(); setOpen(false); }} onClick={e => e.stopPropagation()}>
           <div onMouseDown={e => e.stopPropagation()} style={{ position: 'fixed', top: Math.min((rect ? rect.bottom : 0) + 5, window.innerHeight - 320), left: Math.min(rect ? rect.left : 0, window.innerWidth - 210), width: 196, maxHeight: 316, overflow: 'auto', background: WT.raised, border: `1px solid ${WT.border}`, borderRadius: WT.rM, boxShadow: WT.shPopout, padding: 5, fontFamily: WT.font }}>
             {STATUS_ORDER.map(key => {
-              const s = STATUS[key]; const active = key === a.status;
+              const s = STATUS[key]; const active = key === a.status; const why = !active && window.ruleStatusWhy ? ruleStatusWhy(a, key) : null;
               return (
-                <button key={key} onClick={e => choose(e, key)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', border: 'none', borderRadius: WT.rS, background: active ? WT.hover : 'transparent', cursor: 'pointer', fontFamily: WT.font }}
+                <button key={key} onClick={e => choose(e, key)} title={why || undefined} aria-disabled={!!why}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', border: 'none', borderRadius: WT.rS, background: active ? WT.hover : 'transparent', cursor: why ? 'not-allowed' : 'pointer', fontFamily: WT.font, opacity: why ? 0.45 : 1 }}
                   onMouseEnter={e => { if (!active) e.currentTarget.style.background = WT.hover; }}
                   onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
                   <WIcon name={s.icon} size={14} color={s.fg} strokeWidth={2.2} style={{ flex: 'none' }} />
@@ -482,7 +482,7 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
           </div>
           {a.note && <MetaRow icon="sticky-note" color={WT.fg2}>{a.note}</MetaRow>}
           {a.reason && a.status === 'cancelado' && <MetaRow icon="info" color={WT.danger}>{a.reason}</MetaRow>}
-          {a.reason && a.status === 'remarcado' && <MetaRow icon="calendar-clock" color={STATUS.remarcado.fg}>{a.reason}</MetaRow>}
+          {a.reason && (a.status === 'remarcado' || a.rescheduledFrom) && <MetaRow icon="calendar-clock" color={STATUS.remarcado.fg}>{a.reason}</MetaRow>}
         </Sec>
 
         {/* convênio · cobrança */}

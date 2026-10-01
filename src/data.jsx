@@ -337,7 +337,7 @@ function _genMonthAppts() {
       const remReason = _RESCHED_REASONS[(daySeed >>> 2) % _RESCHED_REASONS.length];
       occupied.forEach((sl, i) => {
         if (i === iCan) out.push(_apptFromSlot(pro.id, iso, sl, 'cancelado', { reason: canReason }));
-        else if (i === iRem) out.push(_apptFromSlot(pro.id, iso, sl, 'remarcado', { reason: `${remReason} · era ${sl.hhmm}` }));
+        else if (i === iRem) out.push(_apptFromSlot(pro.id, iso, sl, 'remarcado', { reason: remReason }));
         else out.push(_apptFromSlot(pro.id, iso, sl));
       });
     });
@@ -498,7 +498,9 @@ function apptAuditLog(a) {
   if (!a) return [];
   const seed = _nseed('audit' + a.id);
   const pro = PROS.find(p => p.id === a.pro) || {};
-  const proName = pro.name ? `Dr(a). ${pro.name.replace(/^(Dra?\.?|Dr\.?)\s*/i, '')}` : 'Profissional';
+  const drName = p => p && p.name ? `Dr(a). ${p.name.replace(/^(Dra?\.?|Dr\.?)\s*/i, '')}` : 'Profissional';
+  const proName = drName(pro);
+  const withPro = d => d ? `${proName} · ${d}` : proName;
   const recep = _AUDIT_ACTORS[seed % _AUDIT_ACTORS.length];
   const chLabel = { whatsapp: 'WhatsApp', sms: 'SMS', email: 'e-mail' }[apptChannel(a)] || 'WhatsApp';
   const start = apptDateTime(a);
@@ -518,17 +520,22 @@ function apptAuditLog(a) {
   out.push({
     icon: 'send', color: WT.info,
     title: `Confirmação enviada por ${chLabel}`, when: D(daysAgo * dayMin - 120),
-    actor: 'Sistema', detail: 'Mensagem automática de confirmação de horário.',
+    actor: 'Sistema', detail: withPro('Mensagem automática de confirmação de horário.'),
   });
   // remarcação de horário (sempre para status remarcado; às vezes p/ outros)
-  if (a.status === 'remarcado' || seed % 4 === 0) {
-    const oldHM = fmtMin((toMin(a.start) - 30 + 24 * 60) % (24 * 60));
+  if (a.status === 'remarcado' || a.rescheduledFrom || seed % 4 === 0) {
+    const mv = a.movedTo;
+    const oldHM = mv ? a.start : (a.prevStart || fmtMin((toMin(a.start) - 30 + 24 * 60) % (24 * 60)));
+    const newHM = mv ? mv.start : a.start;
+    const oldPro = PROS.find(p => p.id === (mv ? a.pro : (a.prevPro || a.pro)));
+    const newPro = PROS.find(p => p.id === (mv ? mv.pro : a.pro)) || pro;
+    const proPart = oldPro && newPro && oldPro.id !== newPro.id ? `${drName(oldPro)} → ${drName(newPro)}` : `Mesmo profissional · ${drName(newPro)}`;
     const cleanReason = (a.reason || '').replace(/\s*·?\s*era\s+\d{1,2}:\d{2}\s*$/i, '').trim();
     out.push({
       icon: 'calendar-clock', color: WT.warning,
       title: 'Horário remarcado', when: D((1 + (seed % 3)) * dayMin),
       actor: seed % 2 ? `Paciente (${chLabel})` : recep,
-      detail: `${oldHM} → ${a.start}${cleanReason ? ' · ' + cleanReason : ''}`,
+      detail: `${oldHM} → ${newHM} · ${proPart}${cleanReason ? ' · ' + cleanReason : ''}`,
     });
   }
   // troca de procedimento (ocasional)
@@ -536,28 +543,28 @@ function apptAuditLog(a) {
     out.push({
       icon: 'replace', color: WT.fg2,
       title: 'Procedimento alterado', when: D((1 + (seed % 2)) * dayMin + 60),
-      actor: recep, detail: `Retorno → ${(PROCS[a.proc] || {}).name || 'Procedimento'}`,
+      actor: recep, detail: withPro(`Retorno → ${(PROCS[a.proc] || {}).name || 'Procedimento'}`),
     });
   }
   // confirmação de presença
   if (['confirmado', 'aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) {
-    out.push({ icon: 'user-check', color: WT.success, title: 'Presença confirmada pelo paciente', when: D(dayMin - 200), actor: `Paciente (${chLabel})`, detail: 'Respondeu "Sim" ao lembrete de confirmação.' });
+    out.push({ icon: 'user-check', color: WT.success, title: 'Presença confirmada pelo paciente', when: D(dayMin - 200), actor: `Paciente (${chLabel})`, detail: withPro('Respondeu "Sim" ao lembrete de confirmação.') });
   }
   // check-in
   if (['aguardando', 'em_atendimento', 'finalizado'].includes(a.status)) {
-    out.push({ icon: 'log-in', color: STATUS.aguardando.fg, title: 'Check-in realizado', when: D(20), actor: recep, detail: 'Paciente na sala de espera.' });
+    out.push({ icon: 'log-in', color: STATUS.aguardando.fg, title: 'Check-in realizado', when: D(20), actor: recep, detail: withPro('Paciente na sala de espera.') });
   }
   if (['em_atendimento', 'finalizado'].includes(a.status)) {
-    out.push({ icon: 'stethoscope', color: STATUS.em_atendimento.fg, title: 'Atendimento iniciado', when: D(-5), actor: proName, detail: '' });
+    out.push({ icon: 'stethoscope', color: STATUS.em_atendimento.fg, title: 'Atendimento iniciado', when: D(-5), actor: proName, detail: proName });
   }
   if (a.status === 'finalizado') {
-    out.push({ icon: 'check-check', color: STATUS.finalizado.fg, title: 'Atendimento finalizado', when: D(-(a.dur || 30)), actor: proName, detail: '' });
+    out.push({ icon: 'check-check', color: STATUS.finalizado.fg, title: 'Atendimento finalizado', when: D(-(a.dur || 30)), actor: proName, detail: proName });
   }
   if (a.status === 'faltou') {
-    out.push({ icon: 'user-x', color: STATUS.faltou.fg, title: 'Marcado como falta', when: D(-15), actor: recep, detail: 'Paciente não compareceu.' });
+    out.push({ icon: 'user-x', color: STATUS.faltou.fg, title: 'Marcado como falta', when: D(-15), actor: recep, detail: withPro('Paciente não compareceu.') });
   }
   if (a.status === 'cancelado') {
-    out.push({ icon: 'x-circle', color: STATUS.cancelado.dot, title: 'Agendamento cancelado', when: D((seed % 2) * dayMin + 90), actor: seed % 2 ? `Paciente (${chLabel})` : recep, detail: a.reason || 'Cancelado' });
+    out.push({ icon: 'x-circle', color: STATUS.cancelado.dot, title: 'Agendamento cancelado', when: D((seed % 2) * dayMin + 90), actor: seed % 2 ? `Paciente (${chLabel})` : recep, detail: withPro(a.reason || 'Cancelado') });
   }
   return out.sort((x, y) => y.when - x.when);
 }

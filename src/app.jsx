@@ -23,6 +23,8 @@ const uid = () => 'n' + Math.random().toString(36).slice(2, 9);
 const TWEAK_DEFAULTS = /*EDITMODE*/{
   lang: 'pt',
   edition: 'final',
+  userAdmin: false,
+  agestafin: true,
 }/*EDITMODE-END*/;
 
 function App() {
@@ -37,6 +39,7 @@ function App() {
     if (['mvp', 'expansion', 'final'].includes(h) && h !== tw.edition) setTweak('edition', h);
   }, []);
   window.__mvp = mvp;
+  window.__user = { admin: !!tw.userAdmin, agestafin: tw.agestafin !== false };
   // capacidades por edição — Expansion = MVP + convênio + salas + equipamentos
   window.__ed = { id: edition, conv: edition !== 'mvp', rooms: edition !== 'mvp', equip: edition !== 'mvp', final: edition === 'final' };
   // Configurações da Agenda (11 chaves legadas) — persistidas em localStorage
@@ -93,7 +96,10 @@ function App() {
   React.useEffect(() => { const r = () => setWidth(window.innerWidth); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
   const compact = width < 860;
 
-  const config = CLINIC_CONFIGS[CLINIC_CONFIG] || CLINIC_CONFIGS.padrao;  const flash = (msg, opts = {}) => { setToast({ msg, ...opts }); clearTimeout(window.__tt); window.__tt = setTimeout(() => setToast(null), opts.dur || 3200); };
+  const config = CLINIC_CONFIGS[CLINIC_CONFIG] || CLINIC_CONFIGS.padrao;  // regra → bloqueia (modal), pede confirmação do Admin, ou executa
+  const [adminConfirm, setAdminConfirm] = React.useState(null);
+  const guard = (r, then) => { if (r.block) { setRuleBlock({ title: r.title, text: r.block }); return; } if (r.confirm) { setAdminConfirm({ title: r.title, text: r.confirm, then }); return; } then(); };
+  const flash = (msg, opts = {}) => { setToast({ msg, ...opts }); clearTimeout(window.__tt); window.__tt = setTimeout(() => setToast(null), opts.dur || 3200); };
 
   const timeStart = TIME_RANGE === '08-18' ? '08:00' : '07:00';
   const timeEnd = TIME_RANGE === '08-18' ? '18:00' : '20:00';
@@ -108,6 +114,9 @@ function App() {
   // status alterável direto pelo card (smart tag)
   window.__onSetStatus = (a, status) => {
     if (status === a.status) return;
+    guard(ruleStatus(a, status), () => setStatusNow(a, status));
+  };
+  const setStatusNow = (a, status) => {
     if (status === 'cancelado') { setCtxCard(null); setCancel({ a }); return; }
     const prev = a.status;
     setAppts(s => s.map(x => x.id === a.id ? { ...x, status } : x));
@@ -147,7 +156,7 @@ function App() {
       plano: form ? form.plano : (payPlano != null ? payPlano : false), date: date || state.date, dur: sumDur || gradeSlotAt(proId || PROS[0].id, date || state.date, time),
       price: sumPrice, fitIn: !!fitIn, note: form && form.notas ? form.notas : null, equip: equip || null,
       channel: form ? form.canal : 'Balcão', room: room || (form ? form.local : null),
-      _patientName: patient && patient.patientName, isNewPt: patient && patient.isNew,
+      _patientName: patient && patient.patientName, isNewPt: patient && patient.isNew, linkedFrom: (form && form._linkedFrom) || null,
       series: series || null, seriesRule: seriesRule || null, seriesSeq: seriesSeq || null,
     };
     setAppts(s => [...s, na]);
@@ -219,6 +228,8 @@ function App() {
     if (wlFit) { applyWlFit(colId, min); return; }
     if (reschedule) { applyReschedule(colId, min); return; }
     const slot = resolveSlot(colId);
+    const pr = rulePast([slot.date], 'criar');
+    if (pr.block) { setRuleBlock({ title: pr.title, text: pr.block }); return; }
     const ctx = { ...slot, time: fmtMin(min) };
     if (state.view === 'semana') {
       const candidates = (agendaSelection(state, set).selected || []).filter(r => r.kind === 'pro').map(r => r.id);
@@ -233,6 +244,9 @@ function App() {
   const onDraft = patch => setDraft(d => d ? { ...d, ...patch } : d);
 
   function onQuickSave(payload) {
+    guard(rulePast([payload.date || state.date], 'criar'), () => quickSaveNow(payload));
+  }
+  function quickSaveNow(payload) {
     setQuick(null); setDraft(null);
     createFromPayload(payload, (na, n) => {
       if (payload.wlId) setWl(s => s.filter(x => x.id !== payload.wlId));
@@ -241,7 +255,12 @@ function App() {
     });
   }
 
-  function onBookingSave({ form, checkin }) {
+  function onBookingSave(arg) {
+    const init = (booking && booking.init) || {};
+    const r = init.editing && init.appt ? ruleEdit(init.appt, arg.form.date) : rulePast([arg.form.date], 'criar');
+    guard(r, () => bookingSaveNow(arg));
+  }
+  function bookingSaveNow({ form, checkin }) {
     const patient = form.patient;
     const init = (booking && booking.init) || {};
     // edição: aplica no escopo (esta / esta e seguintes / todas) mantendo a data de cada ocorrência
@@ -256,19 +275,21 @@ function App() {
       return;
     }
     setBooking(null); setDraft(null);
-    createFromPayload({ patient, procIds: form.procIds, time: form.time, proId: form.proId, date: form.date, equip: form.equip || null, room: form.local, form: { ...form, _checkin: checkin }, fitIn: init.fitIn, recur: form.recur }, (na, n) => {
+    createFromPayload({ patient, procIds: form.procIds, time: form.time, proId: form.proId, date: form.date, equip: form.equip || null, room: form.local, form: { ...form, _checkin: checkin, _linkedFrom: init.linkedFrom }, fitIn: init.fitIn, recur: form.recur }, (na, n) => {
       const pt = patientById(na.pt) || { name: na._patientName || 'Paciente' };
       flash(n > 1 ? `${n} agendamentos recorrentes criados · ${pt.name}` : checkin ? `Agendado e check-in feito · ${pt.name}` : `Agendamento salvo · ${pt.name} ${na.start}`);
     });
   }
 
   // ---- context-card actions ------------------------------------------------
-  function doCheckin(a) {
+  function doCheckin(a) { guard(ruleStatus(a, 'aguardando'), () => doCheckinNow(a)); }
+  function doCheckinNow(a) {
     setAppts(s => s.map(x => x.id === a.id ? { ...x, status: 'aguardando' } : x));
     setCtxCard(null);
     const pt = patientById(a.pt) || {}; flash(`Check-in realizado · ${pt.name || 'paciente'}`);
   }
-  function doCancel(a) { setCtxCard(null); if (a.series) { setRcScope({ verb: 'Cancelar', a, danger: true, then: scope => setCancel({ a, scope }) }); return; } setCancel({ a }); }
+  function doCancel(a) { guard(ruleStatus(a, 'cancelado'), () => doCancelNow(a)); }
+  function doCancelNow(a) { setCtxCard(null); if (a.series) { setRcScope({ verb: 'Cancelar', a, danger: true, then: scope => setCancel({ a, scope }) }); return; } setCancel({ a }); }
   const [rcScope, setRcScope] = React.useState(null); // { verb, a, then(scope) }
   function seriesTargets(a, scope) {
     if (!a.series || scope === 'one') return [a.id];
@@ -297,6 +318,8 @@ function App() {
     }), 900);
   }
   function doReschedule(a) {
+    const r0 = ruleEdit(a, a.date, 'remarcar');
+    if (r0.block) { setCtxCard(null); setRuleBlock({ title: r0.title, text: r0.block }); return; }
     // Configuração: bloquear remarcação de retorno de paciente faltoso
     const pt = patientById(a.pt) || {};
     const isRet = apptProcIds(a).includes('retorno');
@@ -330,14 +353,27 @@ function App() {
       const badProc = procIds.find(pid => pid && !dayAcceptsCond(newPro, date, { procId: pid }));
       if (badProc) { setDropError({ pro: PROS.find(p => p.id === newPro), kind: 'proc', value: (PROCS[badProc] || {}).name || 'esse serviço' }); return; }
     }
-    const prev = { ...a };
-    setAppts(s => s.map(x => x.id === a.id ? { ...x, pro: newPro, date, equip: slot.equip || x.equip, room: slot.room || x.room, start: fmtMin(min), status: 'remarcado', reason: `Remarcado · era ${prev.start}` } : x));
-    set({ freeOnly: reschedule.prevFreeOnly });
-    setReschedule(null);
-    flash(`Remarcado para ${fmtMin(min)}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? prev : x)); setToast(null); } } });
+    guard(ruleEdit(a, date, 'remarcar'), () => {
+      // original fica como Remarcado (status final); o novo horário é um novo agendamento vinculado
+      const prev = { ...a };
+      const nid = uid(), start = fmtMin(min);
+      const na = { ...a, id: nid, pro: newPro, date, equip: slot.equip || a.equip, room: slot.room || a.room, start, status: 'marcado', reason: `Remarcado · era ${prev.start}${prev.date !== date ? ' de ' + dateUtil.fmtShortDate(prev.date) : ''}`, rescheduledFrom: a.id, prevPro: prev.pro, prevStart: prev.start, prevDate: prev.date };
+      setAppts(s => [...s.map(x => x.id === a.id ? { ...x, status: 'remarcado', movedTo: { id: nid, pro: newPro, date, start } } : x), na]);
+      set({ freeOnly: reschedule.prevFreeOnly });
+      setReschedule(null);
+      flash(`Remarcado para ${start}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.filter(x => x.id !== nid).map(x => x.id === a.id ? prev : x)); setToast(null); } } });
+    });
   }
   function openEdit(a, scope) {
     setCtxCard(null);
+    const r = ruleEdit(a, a.date);
+    if (r.block) {
+      const locked = !!apptLockedWhy(a);
+      const ptx = patientById(a.pt) || {};
+      openBooking({ editing: true, readOnly: r.block, appt: a, date: a.date, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: ptx.name, isNew: false },
+        onLinkedNew: locked ? () => openBooking({ date: a.date >= TODAY ? a.date : TODAY, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), linkedFrom: { id: a.id, date: a.date, start: a.start }, patient: { patientId: a.pt, patientName: ptx.name || a._patientName, isNew: false } }) : null });
+      return;
+    }
     if (a.series && !scope) { setRcScope({ verb: 'Editar', a, then: sc => openEdit(a, sc) }); return; }
     openBooking({ editing: true, scope: scope || 'one', appt: a, date: a.date, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: (patientById(a.pt) || {}).name, isNew: false } });
   }
@@ -379,6 +415,11 @@ function App() {
   function applyDrop(colId, min) {
     const a = drag.appt; if (!a) return;
     const slot = resolveSlot(colId);
+    const rr = ruleEdit(a, slot.date || a.date, 'remarcar');
+    if (!rr.ok) { setDrag({ appt: null }); guard(rr, () => applyDropNow(a, colId, min, slot)); return; }
+    applyDropNow(a, colId, min, slot);
+  }
+  function applyDropNow(a, colId, min, slot) {
     // ---- validação: o médico de destino atende o convênio e realiza o serviço? ----
     const tPro = targetProOf(colId);
     if (tPro && tPro !== a.pro) {
@@ -532,6 +573,10 @@ function App() {
         footer={<><span style={{ flex: 1 }} /><WButton variant="primary" label="Entendi" onClick={() => setRuleBlock(null)} /></>}>
         <div style={{ fontSize: 14, color: WT.fg2, lineHeight: 1.55 }}>{ruleBlock.text}</div>
       </CenterModal>}
+      {adminConfirm && <CenterModal title={adminConfirm.title} icon="shield-alert" iconTone="warning" width={430} onClose={() => setAdminConfirm(null)}
+        footer={<><span style={{ flex: 1 }} /><WButton variant="default" label="Voltar" onClick={() => setAdminConfirm(null)} /><WButton variant="primary" label="Confirmar e salvar" onClick={() => { const t = adminConfirm.then; setAdminConfirm(null); t(); }} /></>}>
+        <div style={{ fontSize: 14, color: WT.fg2, lineHeight: 1.55 }}>{adminConfirm.text}</div>
+      </CenterModal>}
       <WToast toast={toast} />
 
       <TweaksPanel title="Tweaks">
@@ -539,6 +584,11 @@ function App() {
         <TweakRadio label="Edição do produto" value={tw.edition}
           options={[{ value: 'final', label: 'Final' }, { value: 'mvp', label: 'MVP' }]}
           onChange={v => setTweak('edition', v)} />
+        <TweakSection label="Usuário" />
+        <TweakRadio label="Perfil" value={tw.userAdmin ? 'admin' : 'recep'}
+          options={[{ value: 'recep', label: 'Recepção' }, { value: 'admin', label: 'Admin' }]}
+          onChange={v => setTweak('userAdmin', v === 'admin')} />
+        <TweakToggle label="Permissão agestafin" value={tw.agestafin !== false} onChange={v => setTweak('agestafin', v)} />
         <TweakSection label="Demonstração" />
         <TweakRadio label="Idioma / Language" value={tw.lang}
           options={[{ value: 'pt', label: 'PT' }, { value: 'en', label: 'EN' }, { value: 'es', label: 'ES' }, { value: 'it', label: 'IT' }]}
