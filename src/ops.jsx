@@ -66,7 +66,7 @@ function CancelModal({ a, onClose, onConfirm }) {
 
 function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete, embedded }) {
   const editing = !!block;
-  const perms = block ? blockEditable(block) : { edit: true, del: false };
+  const perms = !permOf('block') ? { edit: false, del: false, note: 'Você não tem permissão para criar ou editar bloqueios.' } : block ? blockEditable(block) : { edit: true, del: false };
   const readOnly = editing && !perms.edit;
   const [resources, setResources] = React.useState(() => {
     if (!block) return ctx.proId ? [{ kind: 'pro', id: ctx.proId }] : [];

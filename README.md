@@ -34,6 +34,19 @@ Upstream copies overwrite these, so each sync must put them back:
    preset passes `dow` as a number (`{freq:'month', nth, dow: 3}`) while `rcLabel`
    unconditionally treats it as an array, so picking "Mensal na(o) …" white-screens
    the whole prototype. Fix it in the Claude Design project to retire this patch.
+4. **Permissions simulator** (29/10/2026, question from the devs: "what does the
+   agenda do when the user lacks `agenda:read` / `agenda:create`…?"). Pill
+   "Permissões n/5" in the top bar toggles the 5 New Agenda permissions (view,
+   book, edit, fit-in, blocks) plus the Clinic Admin profile; stored in
+   `localStorage` (`na-perms-v1`). New file `src/perms.jsx` (survives a sync) +
+   hooks that a sync overwrites: `index.html` (script tag), `src/rules.jsx`
+   (`permOf`/`rulePerm`, gates in `ruleEdit`/`ruleStatus`/`ruleNoDrag`),
+   `src/app.jsx` (state, `onCreate`/`onSlotClick`/`doRetorno`/`startWlFit`
+   guards, `NoAgendaAccess`, hidden sidebar), `src/shell.jsx` (`PermsMenu` in
+   `TopNavbar`, `CreateButton` filtered), `src/booking.jsx` (kind bar filtered),
+   `src/ops.jsx` (blocks read-only), `src/card.jsx` (context card read-only),
+   `src/views.jsx` (hover ghost hidden). Port it to the Claude Design project to
+   retire this patch.
 
 ## Running locally
 

@@ -4,6 +4,15 @@ const ST_FUTURE_OK = ['marcado', 'confirmado', 'cancelado'];
 const ST_FINAL_LOCK = ['cancelado', 'remarcado'];
 const ST_AGESTAFIN = ['em_atendimento', 'finalizado', 'aguardando', 'faltou'];
 const ruleUser = () => window.__user || { admin: false, agestafin: true };
+// permissões do usuário (simulador em perms.jsx) — ausente = tudo liberado
+const permOf = k => !window.__perm || window.__perm[k] !== false;
+const PERM_MSG = {
+  book: 'Você não tem permissão para agendar. Peça ao administrador da clínica para liberar “Agendar” no seu perfil.',
+  edit: 'Você não tem permissão para editar agendamentos — isso inclui trocar o status, remarcar e cancelar. Peça ao administrador da clínica para liberar “Editar” no seu perfil.',
+  fitin: 'Você não tem permissão para fazer encaixes. Peça ao administrador da clínica para liberar “Encaixe” no seu perfil.',
+  block: 'Você não tem permissão para criar ou editar bloqueios. Peça ao administrador da clínica para liberar “Bloqueios” no seu perfil.',
+};
+const rulePerm = k => permOf(k) ? { ok: true } : { title: 'Sem permissão', block: PERM_MSG[k] };
 const isPastDate = iso => !!iso && iso < TODAY;
 const isFutureDate = iso => !!iso && iso > TODAY;
 const _stl = k => (STATUS[k] || {}).label || k;
@@ -24,6 +33,7 @@ function rulePast(dates, verb) {
   return { title: 'Alteração em data passada', confirm: `Você vai ${verb} um agendamento em data passada (${when}). Como administrador, confirme para salvar.` };
 }
 function ruleEdit(a, targetDate, verb = 'editar') {
+  if (!permOf('edit')) return rulePerm('edit');
   const l = apptLockedWhy(a);
   if (l) return { title: 'Agendamento encerrado', block: l };
   return rulePast([a.date, targetDate || a.date], verb);
@@ -31,6 +41,7 @@ function ruleEdit(a, targetDate, verb = 'editar') {
 function ruleStatus(a, to) {
   const from = a.status;
   if (from === to) return { ok: true };
+  if (!permOf('edit')) return rulePerm('edit');
   const l = apptLockedWhy(a);
   if (l) return { title: 'Agendamento encerrado', block: l };
   if (to === 'remarcado') return { title: 'Use “Remarcar”', block: 'O status Remarcado é aplicado ao escolher um novo horário pela ação Remarcar.' };
@@ -42,6 +53,6 @@ function ruleStatus(a, to) {
   return rulePast([a.date], 'alterar o status de');
 }
 const ruleStatusWhy = (a, to) => { const r = ruleStatus(a, to); return r.block || null; };
-const ruleNoDrag = a => !!(apptLockedWhy(a) || (isPastDate(a.date) && !ruleUser().admin));
+const ruleNoDrag = a => !!(!permOf('edit') || apptLockedWhy(a) || (isPastDate(a.date) && !ruleUser().admin));
 
-Object.assign(window, { ST_CODE, ruleUser, isPastDate, isFutureDate, apptLockedWhy, rulePast, ruleEdit, ruleStatus, ruleStatusWhy, ruleNoDrag });
+Object.assign(window, { ST_CODE, ruleUser, permOf, rulePerm, PERM_MSG, isPastDate, isFutureDate, apptLockedWhy, rulePast, ruleEdit, ruleStatus, ruleStatusWhy, ruleNoDrag });

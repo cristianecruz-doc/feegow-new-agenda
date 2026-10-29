@@ -185,7 +185,7 @@ function LangMenu({ lang, onLang }) {
     </span>
   );
 }
-function TopNavbar({ unit, onUnit, onToggleSidebar, compact, edition, onEdition, lang, onLang, page, onNavigate }) {
+function TopNavbar({ unit, onUnit, onToggleSidebar, compact, edition, onEdition, perms, setPerms, admin, setAdmin, lang, onLang, page, onNavigate }) {
   // largura da janela: abaixo de ~1240px o menu perde espaço e os módulos menos usados
   // vão para "Mais" (1366 com Windows a 125% → 1093px CSS)
   const [vw, setVw] = React.useState(() => window.innerWidth);
@@ -229,6 +229,8 @@ function TopNavbar({ unit, onUnit, onToggleSidebar, compact, edition, onEdition,
           <LangMenu lang={lang} onLang={onLang} />
           <span style={{ width: 6, flex: 'none' }} />
           <EditionMenu edition={edition} onEdition={onEdition} />
+          <span style={{ width: 6, flex: 'none' }} />
+          <PermsMenu perms={perms} setPerms={setPerms} admin={admin} setAdmin={setAdmin} />
           <span style={{ width: 1, height: 22, background: WT.borderSub, margin: '0 8px', flex: 'none' }} />
           {!compact && !tight && <WIconButton name="phone" color={WT.fg2} title="Ligações" />}
           {!compact && !tight && <WIconButton name="mail" color={WT.fg2} title="Mensagens" />}
@@ -277,14 +279,17 @@ const CREATE_ITEMS = [
   { id: 'encaixe',     icon: 'git-merge',     label: 'Encaixe',      desc: 'Sobrepõe um horário ocupado' },
   { id: 'bloqueio',    icon: 'ban',           label: 'Bloqueio',     desc: 'Almoço, reunião, ausência' },
 ];
+const CREATE_PERM = { agendamento: 'book', encaixe: 'fitin', bloqueio: 'block' };
 function CreateButton({ collapsed, onCreate }) {
   const [open, setOpen] = React.useState(false);
+  const items = CREATE_ITEMS.filter(it => permOf(CREATE_PERM[it.id]));
   const ref = React.useRef(null);
   React.useEffect(() => {
     if (!open) return;
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
   }, [open]);
+  if (!items.length) return null;
   return (
     <div ref={ref} style={{ position: 'relative', flex: 'none' }}>
       <button onClick={() => setOpen(o => !o)} style={{
@@ -302,7 +307,7 @@ function CreateButton({ collapsed, onCreate }) {
           position: 'absolute', top: 44, left: 0, width: collapsed ? 248 : '100%', minWidth: 248, zIndex: 60,
           background: '#fff', border: `1px solid ${WT.border}`, borderRadius: WT.rL, boxShadow: WT.shPopout, overflow: 'hidden', padding: 6,
         }}>
-          {CREATE_ITEMS.map(it => (
+          {items.map(it => (
             <button key={it.id} onClick={() => { setOpen(false); onCreate(it.id); }} style={{
               display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '9px 10px', borderRadius: WT.rM,
               border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font,

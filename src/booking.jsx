@@ -643,10 +643,11 @@ function BookingHost({ init, config, flow, compact, perms, appts, flash, onCance
   );
 
   // tipo de ação escolhido no topo da criação (agendamento · bloqueio · encaixe)
-  const KindBar = !init.editing && !init.block && (
+  // só os tipos que o usuário tem permissão de criar
+  const kindOpts = [{ value: 'agendamento', label: 'Agendamento', perm: 'book' }, { value: 'bloqueio', label: 'Bloqueio', perm: 'block' }, { value: 'encaixe', label: 'Encaixe', perm: 'fitin' }].filter(o => permOf(o.perm));
+  const KindBar = !init.editing && !init.block && kindOpts.length > 1 && (
     <div style={{ flex: 'none', padding: '8px 16px 10px' }}>
-      <WSegmented value={kind} onChange={setKind}
-        options={[{ value: 'agendamento', label: 'Agendamento' }, { value: 'bloqueio', label: 'Bloqueio' }, { value: 'encaixe', label: 'Encaixe' }]} />
+      <WSegmented value={kind} onChange={setKind} options={kindOpts} />
     </div>
   );
 

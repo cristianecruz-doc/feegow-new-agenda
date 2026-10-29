@@ -408,7 +408,8 @@ function StatusSelect({ a }) {
 function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel, onOpen, onRetorno }) {
   const pt = patientById(a.pt) || { name: a.pt };
   const t = apptColors(a); const st = STATUS[a.status];
-  const showRetorno = !cfgGet('OcultarBotaoRetorno') && !window.__mvp;
+  const canEdit = permOf('edit');
+  const showRetorno = !cfgGet('OcultarBotaoRetorno') && !window.__mvp && permOf('book');
   const pro = PROS.find(p => p.id === a.pro) || EQUIP.find(e => e.id === a.pro) || {};
   const end = fmtMin(toMin(a.start) + a.dur);
   const Row = ({ icon, children }) => (
@@ -436,8 +437,8 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '12px 12px 0 16px' }}>
           <StatusSelect a={a} />
           <span style={{ flex: 1 }} />
-          <WIconButton name="trash-2" dim={30} onClick={() => onCancel(a)} title="Cancelar agendamento" color={WT.dangerFill} />
-          <WIconButton name="pencil" dim={30} onClick={() => onOpen(a)} title="Editar agendamento" />
+          {canEdit && <WIconButton name="trash-2" dim={30} onClick={() => onCancel(a)} title="Cancelar agendamento" color={WT.dangerFill} />}
+          <WIconButton name={canEdit ? 'pencil' : 'eye'} dim={30} onClick={() => onOpen(a)} title={canEdit ? 'Editar agendamento' : 'Ver agendamento (somente leitura)'} />
           <WIconButton name="x" dim={30} onClick={onClose} title="Fechar" />
         </div>
 
@@ -503,10 +504,17 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
         })()}
 
         {/* ações */}
-        <div style={{ display: 'grid', gridTemplateColumns: showRetorno ? '1fr 1fr' : '1fr', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}` }}>
-          <WButton variant="default" leadingIcon="calendar-clock" label="Remarcar" onClick={() => onReschedule(a)} />
-          {showRetorno && <WButton variant="default" label="Retorno" onClick={() => onRetorno && onRetorno(a)} />}
-        </div>
+        {(canEdit || showRetorno) && (
+          <div style={{ display: 'grid', gridTemplateColumns: canEdit && showRetorno ? '1fr 1fr' : '1fr', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}` }}>
+            {canEdit && <WButton variant="default" leadingIcon="calendar-clock" label="Remarcar" onClick={() => onReschedule(a)} />}
+            {showRetorno && <WButton variant="default" label="Retorno" onClick={() => onRetorno && onRetorno(a)} />}
+          </div>
+        )}
+        {!canEdit && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: `1px solid ${WT.borderSub}`, fontSize: 12.5, color: WT.muted }}>
+            <WIcon name="lock" size={13} color={WT.muted} style={{ flex: 'none' }} />Somente leitura · sem permissão para editar
+          </div>
+        )}
       </div>
     </WPopover>
   );

@@ -284,7 +284,7 @@ function ColumnTrack({ colId, appts, blocks, startMin, endMin, slotMin, pxPerMin
       })()}
 
       {/* hover ghost / drop indicator */}
-      {hoverMin != null && !drag.appt && (
+      {hoverMin != null && !drag.appt && (window.__rxCond || (occupied(hoverMin) ? permOf('fitin') : (permOf('book') || permOf('fitin')))) && (
         <GhostSlot top={(hoverMin - startMin) * pxPerMin} height={slotDefaultAt(hoverMin) * pxPerMin - 2} gutter={GUTTER} parallel={occupied(hoverMin)}
           s={hoverMin} dur={slotDefaultAt(hoverMin)}
           onClick={rect => onSlotClick(colId, hoverMin, rect || ref.current.getBoundingClientRect())} />

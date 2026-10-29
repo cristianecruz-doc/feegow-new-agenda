@@ -40,6 +40,11 @@ function App() {
   }, []);
   window.__mvp = mvp;
   window.__user = { admin: !!tw.userAdmin, agestafin: tw.agestafin !== false };
+  // Permissões do usuário (simulador na barra superior) — Admin sempre tem as 5
+  const [perms, setPermsState] = React.useState(permsLoad);
+  const setPerms = p => { permsSave(p); setPermsState(p); };
+  const perm = tw.userAdmin ? PERM_ALL : perms;
+  window.__perm = perm;
   // capacidades por edição — Expansion = MVP + convênio + salas + equipamentos
   window.__ed = { id: edition, conv: edition !== 'mvp', rooms: edition !== 'mvp', equip: edition !== 'mvp', final: edition === 'final' };
   // Configurações da Agenda (11 chaves legadas) — persistidas em localStorage
@@ -207,6 +212,8 @@ function App() {
   };
 
   function onCreate(kind) {
+    const pr = rulePerm({ agendamento: 'book', encaixe: 'fitin', bloqueio: 'block' }[kind] || 'book');
+    if (pr.block) { setRuleBlock({ title: pr.title, text: pr.block }); return; }
     const base = { date: state.date, time: '08:00', proId: app.dayPro };
     if (kind === 'bloqueio') { openBooking({ ...base, time: '12:00', kind: 'bloqueio' }); return; }
     if (kind === 'encaixe') { openBooking({ ...base, fitIn: true }); return; }
@@ -231,6 +238,11 @@ function App() {
     const pr = rulePast([slot.date], 'criar');
     if (pr.block) { setRuleBlock({ title: pr.title, text: pr.block }); return; }
     const ctx = { ...slot, time: fmtMin(min) };
+    // sem "Agendar": só quem tem Encaixe ainda cria pelo clique no horário (abre como encaixe)
+    if (!perm.book) {
+      if (perm.fitin) { setDraft({ colId, time: ctx.time, dur: gradeSlotAt(ctx.proId, slot.date, ctx.time) || 30 }); openBooking({ ...ctx, fitIn: true }); }
+      return; // sem Agendar nem Encaixe: horário livre não tem hover nem reage ao clique
+    }
     if (state.view === 'semana') {
       const candidates = (agendaSelection(state, set).selected || []).filter(r => r.kind === 'pro').map(r => r.id);
       ctx.proOptions = candidates.length ? candidates : PROS.map(p => p.id);
@@ -371,7 +383,7 @@ function App() {
       const locked = !!apptLockedWhy(a);
       const ptx = patientById(a.pt) || {};
       openBooking({ editing: true, readOnly: r.block, appt: a, date: a.date, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), patient: { patientId: a.pt, patientName: ptx.name, isNew: false },
-        onLinkedNew: locked ? () => openBooking({ date: a.date >= TODAY ? a.date : TODAY, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), linkedFrom: { id: a.id, date: a.date, start: a.start }, patient: { patientId: a.pt, patientName: ptx.name || a._patientName, isNew: false } }) : null });
+        onLinkedNew: locked && perm.book ? () => openBooking({ date: a.date >= TODAY ? a.date : TODAY, time: a.start, proId: a.pro, procIds: (a.procs && a.procs.length ? a.procs : [a.proc]), linkedFrom: { id: a.id, date: a.date, start: a.start }, patient: { patientId: a.pt, patientName: ptx.name || a._patientName, isNew: false } }) : null });
       return;
     }
     if (a.series && !scope) { setRcScope({ verb: 'Editar', a, then: sc => openEdit(a, sc) }); return; }
@@ -401,6 +413,7 @@ function App() {
 
   function doRetorno(a) {
     setCtxCard(null);
+    if (!perm.book) { setRuleBlock({ title: 'Sem permissão', text: PERM_MSG.book }); return; }
     const pt = patientById(a.pt) || {};
     openBooking({ date: state.date, time: a.start, proId: a.pro, procIds: ['retorno'], patient: { patientId: a.pt, patientName: pt.name || a._patientName, isNew: false } });
   }
@@ -459,6 +472,7 @@ function App() {
   };
   // "Marcar" a partir da lista: mesmo comportamento do remarcar — navega na agenda e escolhe um horário livre
   function startWlFit(e) {
+    if (!perm.book) { setRuleBlock({ title: 'Sem permissão', text: PERM_MSG.book }); return; }
     setWlOpen(false); setCtxCard(null); setQuick(null); setDraft(null);
     setWlFit({ e, prevFreeOnly: app.freeOnly });
     set({ freeOnly: true });
@@ -488,11 +502,12 @@ function App() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: WT.bg }}>
-      <TopNavbar unit="Unidade Centro" onUnit={() => {}} compact={compact} onToggleSidebar={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} edition={tw.edition} onEdition={v => setTweak('edition', v)} lang={tw.lang} onLang={v => setTweak('lang', v)} page={app.page} onNavigate={id => set({ page: id })} />
+      <TopNavbar unit="Unidade Centro" onUnit={() => {}} compact={compact} onToggleSidebar={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} edition={tw.edition} onEdition={v => setTweak('edition', v)}
+        perms={perms} setPerms={setPerms} admin={!!tw.userAdmin} setAdmin={v => setTweak('userAdmin', v)} lang={tw.lang} onLang={v => setTweak('lang', v)} page={app.page} onNavigate={id => set({ page: id })} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {!compact && <Sidebar collapsed={app.sidebarCollapsed} onToggle={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} date={app.date} onSelectDate={iso => set({ date: iso })} onCreate={onCreate} agendaSel={sidebarAgendaSel} />}
+        {!compact && perm.view && <Sidebar collapsed={app.sidebarCollapsed} onToggle={() => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} date={app.date} onSelectDate={iso => set({ date: iso })} onCreate={onCreate} agendaSel={sidebarAgendaSel} />}
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          {app.page === 'agenda-config'
+          {!perm.view && app.page === 'agenda' ? <NoAgendaAccess /> : app.page === 'agenda-config'
             ? <AgendaConfigPage cfg={cfg} onBack={() => set({ page: 'agenda' })} resetSection={resetSection} onSimulateDayEnd={simulateDayEnd}
                 setCfg={patch => { setCfg(patch); flash('Configuração salva'); }} />
             : <>
