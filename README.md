@@ -47,6 +47,13 @@ Upstream copies overwrite these, so each sync must put them back:
    `src/ops.jsx` (blocks read-only), `src/card.jsx` (context card read-only),
    `src/views.jsx` (hover ghost hidden). Port it to the Claude Design project to
    retire this patch.
+5. `src/card.jsx` (context card, "convênio · cobrança" block) — in the Final
+   edition (`window.__ed.conv`) an insurance booking (`a.plano`) shows only the
+   insurance name; the R$ value row is hidden. Particular bookings and the MVP
+   edition still show the value (04/11/2026, Cris). Same patch fixes `src/data.jsx`
+   `A()`: `plano` now follows the booking's own `conv` (before, a booking passed
+   as 'Particular' got `plano: true` whenever the patient had an insurance). Port it to the Claude Design
+   project to retire this patch.
 
 ## Running locally
 

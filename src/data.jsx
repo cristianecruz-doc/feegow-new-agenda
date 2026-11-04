@@ -202,7 +202,7 @@ const A = (pro, pt, proc, start, status, conv, opts = {}) => {
   return {
     id: 'a' + _id, pro, pt, proc: ids[0], procs: ids, start, status,
     conv: conv || (patientById(pt) || {}).conv || 'Particular',
-    plano: conv !== 'Particular' && conv !== undefined ? true : ((patientById(pt) || {}).conv !== 'Particular'),
+    plano: (conv || (patientById(pt) || {}).conv || 'Particular') !== 'Particular',
     date: opts.date || TODAY,
     dur: opts.dur || sumDur || procedure.dur,
     price: opts.price != null ? opts.price : sumPrice,

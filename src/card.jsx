@@ -488,8 +488,8 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
 
         {/* convênio · cobrança */}
         <Sec>
-          {window.__ed && window.__ed.conv && <MetaRow icon="shield-check">{a.conv}{a.plano ? '' : ' (particular)'}</MetaRow>}
-          <MetaRow icon="banknote">{a.price ? brl(a.price) : 'Sem cobrança'}</MetaRow>
+          {window.__ed && window.__ed.conv && <MetaRow icon="shield-check">{a.plano ? a.conv : 'Particular'}</MetaRow>}
+          {!(window.__ed && window.__ed.conv && a.plano) && <MetaRow icon="banknote">{a.price ? brl(a.price) : 'Sem cobrança'}</MetaRow>}
         </Sec>
 
         {/* notificações */}
