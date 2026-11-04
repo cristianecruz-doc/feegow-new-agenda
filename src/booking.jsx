@@ -534,7 +534,9 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
 
 // ---- Patient tab bar (Agendamento · Ficha · Histórico · Conta) --------------
 // MVP: Ficha · Histórico · Conta abrem a tela do paciente no Feegow legado (sem edição pelo agendamento)
-const legacyPatientUrl = pid => `https://app.feegow.com/main/?P=Pacientes&I=${String(pid || '').replace(/\D/g, '') || pid}&Pers=1`;
+// cada botão abre a aba certa da ficha via ToArea (Pacientes.asp clica no item do menu) — patch local nº 7, CON-1946
+const LEGACY_PATIENT_AREA = { historico: 'menu-aba-pacientes-agendamentos', conta: 'menu-aba-pacientes-conta' };
+const legacyPatientUrl = (pid, area) => `https://app.feegow.com/main/?P=Pacientes&Pers=1&I=${String(pid || '').replace(/\D/g, '') || pid}${LEGACY_PATIENT_AREA[area] ? '&ToArea=' + LEGACY_PATIENT_AREA[area] : ''}`;
 function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms, pid }) {
   const legacy = !!window.__mvp;
   const tabs = [
@@ -551,7 +553,7 @@ function PatientTabBar({ tab, setTab, hasPatient, isNewPt, perms, pid }) {
         const active = tab === t.id;
         return (
           <button key={t.id} aria-pressed={active} disabled={t.disabled} title={t.disabled ? t.hint : legacy && t.id !== 'agendamento' ? 'Abre a tela do paciente no Feegow (nova aba)' : undefined}
-            onClick={() => { if (t.disabled) return; if (legacy && t.id !== 'agendamento') { window.open(legacyPatientUrl(pid), '_blank', 'noopener'); return; } setTab(t.id); }}
+            onClick={() => { if (t.disabled) return; if (legacy && t.id !== 'agendamento') { window.open(legacyPatientUrl(pid, t.id), '_blank', 'noopener'); return; } setTab(t.id); }}
             onMouseEnter={e => { if (!t.disabled && !active) e.currentTarget.style.background = WT.hover; }} onMouseLeave={e => { if (!active) e.currentTarget.style.background = '#fff'; }}
             style={{
               flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30, padding: '0 8px', borderRadius: WT.rM,

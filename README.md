@@ -60,6 +60,11 @@ Upstream copies overwrite these, so each sync must put them back:
    professional columns (entity found in `PROS`); rooms/equipment stay plain text. The mock
    ids (`p1`…) become `I=1`… (04/11/2026, Cris). Port it to the Claude Design project to
    retire this patch.
+7. `src/booking.jsx` (`legacyPatientUrl` / `PatientTabBar`, MVP edition) — the drawer's
+   Ficha / Histórico / Conta buttons each open their own Feegow tab instead of the same
+   generic patient page: Ficha `?P=Pacientes&Pers=1&I=<id>`, Histórico
+   `…&ToArea=menu-aba-pacientes-agendamentos`, Conta `…&ToArea=menu-aba-pacientes-conta`
+   (CON-1946, 04/11/2026). Port it to the Claude Design project to retire this patch.
 
 ## Running locally
 
