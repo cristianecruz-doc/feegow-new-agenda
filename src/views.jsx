@@ -91,7 +91,14 @@ function ColHeader({ entity, sub, subParts, occupancy, onPick, date }) {
       <WProfileAvatar src={entity.photo} size={30} icon={icon} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-          <span style={{ fontSize: 13, fontWeight: WT.wEmph, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entity.short || entity.name || entity.label}</span>
+          {(window.PROS || []).some(p => p.id === entity.id)
+            /* nome do profissional → perfil no Feegow (nova aba), patch local nº 6 */
+            ? <a href={`https://app.feegow.com/main/?P=profissionais&Pers=1&I=${String(entity.id).replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                title="Abrir perfil do profissional" className="na-pro-link"
+                style={{ fontSize: 13, fontWeight: WT.wEmph, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: 'none', textUnderlineOffset: 2, cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+                onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}>{entity.short || entity.name || entity.label}</a>
+            : <span style={{ fontSize: 13, fontWeight: WT.wEmph, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entity.short || entity.name || entity.label}</span>}
           {entity.doctoralia && <img src={(window.__resources && window.__resources.doctoIcon) || "assets/icon-doctoralia.png"} alt="" title="Profissional integrado à Doctoralia" style={{ width: 14, height: 14, flex: 'none' }} />}
         </div>
         {subParts && subParts.length

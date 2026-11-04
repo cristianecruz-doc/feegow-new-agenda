@@ -54,6 +54,12 @@ Upstream copies overwrite these, so each sync must put them back:
    `A()`: `plano` now follows the booking's own `conv` (before, a booking passed
    as 'Particular' got `plano: true` whenever the patient had an insurance). Port it to the Claude Design
    project to retire this patch.
+6. `src/views.jsx` (`ColHeader`) — the professional's name in the column header is a link
+   to their Feegow profile, `https://app.feegow.com/main/?P=profissionais&Pers=1&I=<id>`,
+   opened in a new tab, underline on hover, tooltip "Abrir perfil do profissional". Only for
+   professional columns (entity found in `PROS`); rooms/equipment stay plain text. The mock
+   ids (`p1`…) become `I=1`… (04/11/2026, Cris). Port it to the Claude Design project to
+   retire this patch.
 
 ## Running locally
 
