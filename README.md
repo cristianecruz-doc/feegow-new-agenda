@@ -65,6 +65,10 @@ Upstream copies overwrite these, so each sync must put them back:
    generic patient page: Ficha `?P=Pacientes&Pers=1&I=<id>`, Histórico
    `…&ToArea=menu-aba-pacientes-agendamentos`, Conta `…&ToArea=menu-aba-pacientes-conta`
    (CON-1946, 04/11/2026). Port it to the Claude Design project to retire this patch.
+8. `src/data.jsx` `GRADES` — Renata A. (p1), Camila S. (p3) and Felipe M. (p4)
+   have different start/end times every weekday instead of one Mon–Fri block
+   (10/11/2026, Cris). Shared by every edition (Final and MVP). Port it to the
+   Claude Design project to retire this patch.
 
 ## Running locally
 

@@ -77,17 +77,22 @@ const effectiveRoom = a => a.room || gradeRoomAt(a.pro, a.date, a.start) || (PRO
 const GREEN = '#1c7f00';
 const GRADES = [
   // Dra. Renata — manhã de consultas no Pardal, tarde de procedimentos no Bem-te-vi
-  // (exemplo: mesmo profissional, dois turnos em salas diferentes)
-  { pro: 'p1', days: [1, 2, 3, 4, 5], start: '08:00', end: '12:00', slotMin: 30, color: GREEN,      label: 'Consultas',     procs: ['derm', 'retorno', 'tele'], convenios: ['Particular', 'Unimed'], room: 'Consultório 1 · Pardal', doctoralia: true },
-  { pro: 'p1', days: [1, 2, 3, 4, 5], start: '13:00', end: '18:00', slotMin: 60, color: '#7b3fb0',  label: 'Procedimentos', procs: ['mapa', 'infil', 'usg'], convenios: ['Particular', 'Unimed'], room: 'Consultório 2 · Bem-te-vi' },
-  { pro: 'p1', days: [6],             start: '08:00', end: '12:00', slotMin: 30, color: GREEN,      label: 'Consultas',     procs: ['derm', 'retorno'], convenios: ['Particular', 'Unimed'], room: 'Consultório 1 · Pardal', doctoralia: true },
+  // (exemplo: mesmo profissional, dois turnos em salas diferentes). Início e fim
+  // mudam a cada dia da semana; almoço fixo 12:00–13:00.
+  ...[[1, '07:30', '17:00'], [2, '08:30', '19:00'], [3, '09:00', '18:30'], [4, '07:00', '16:00'], [5, '08:00', '15:00']].flatMap(([d, ini, fim]) => [
+    { pro: 'p1', days: [d], start: ini,     end: '12:00', slotMin: 30, color: GREEN,     label: 'Consultas',     procs: ['derm', 'retorno', 'tele'], convenios: ['Particular', 'Unimed'], room: 'Consultório 1 · Pardal', doctoralia: true },
+    { pro: 'p1', days: [d], start: '13:00', end: fim,     slotMin: 60, color: '#7b3fb0', label: 'Procedimentos', procs: ['mapa', 'infil', 'usg'], convenios: ['Particular', 'Unimed'], room: 'Consultório 2 · Bem-te-vi' },
+  ]),
+  { pro: 'p1', days: [6],             start: '08:30', end: '12:30', slotMin: 30, color: GREEN,      label: 'Consultas',     procs: ['derm', 'retorno'], convenios: ['Particular', 'Unimed'], room: 'Consultório 1 · Pardal', doctoralia: true },
   // Dr. Bruno — dois turnos verdes
   { pro: 'p2', days: [1, 2, 3, 4, 5], start: '08:00', end: '13:30', slotMin: 60, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno'], convenios: ['Particular', 'SulAmérica'], intervals: [{ start: '12:00', end: '12:30', label: 'Almoço' }] },
   { pro: 'p2', days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', slotMin: 60, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno', 'infil'], convenios: ['Particular', 'SulAmérica'] },
-  // Dra. Camila — dia todo, convênios limitados
-  { pro: 'p3', days: [1, 2, 3, 4, 5], start: '08:00', end: '17:00', slotMin: 15, color: '#0e7aa0',  label: 'Cardiologia',   procs: ['cardio', 'retorno', 'ecg', 'tele'], convenios: ['Particular', 'Unimed', 'Bradesco Saúde'], intervals: [{ start: '12:00', end: '13:00', label: 'Almoço' }], doctoralia: true },
-  // Dr. Felipe — clínico
-  { pro: 'p4', days: [1, 2, 3, 4, 5], start: '08:00', end: '15:30', slotMin: 15, color: GREEN,      label: 'Clínica geral', procs: ['clinico', 'retorno', 'tele'], convenios: ['Particular', 'Amil'], intervals: [{ start: '12:00', end: '13:00', label: 'Almoço' }] },
+  // Dra. Camila — dia todo, convênios limitados; início/fim diferentes a cada dia
+  ...[[1, '08:00', '17:00', '12:00', '13:00'], [2, '09:30', '18:30', '13:00', '14:00'], [3, '07:30', '14:00', '12:00', '12:30'], [4, '10:00', '19:00', '13:00', '14:00'], [5, '08:30', '16:00', '12:00', '13:00']].map(([d, ini, fim, li, lf]) => (
+    { pro: 'p3', days: [d], start: ini, end: fim, slotMin: 15, color: '#0e7aa0',  label: 'Cardiologia',   procs: ['cardio', 'retorno', 'ecg', 'tele'], convenios: ['Particular', 'Unimed', 'Bradesco Saúde'], intervals: [{ start: li, end: lf, label: 'Almoço' }], doctoralia: true })),
+  // Dr. Felipe — clínico; início/fim diferentes a cada dia (seg e sex só meio período)
+  ...[[1, '07:00', '13:00', null], [2, '08:00', '16:30', ['12:00', '13:00']], [3, '10:00', '19:00', ['13:00', '14:00']], [4, '09:00', '17:30', ['12:30', '13:30']], [5, '07:30', '12:30', null]].map(([d, ini, fim, lunch]) => (
+    { pro: 'p4', days: [d], start: ini, end: fim, slotMin: 15, color: GREEN,      label: 'Clínica geral', procs: ['clinico', 'retorno', 'tele'], convenios: ['Particular', 'Amil'], ...(lunch ? { intervals: [{ start: lunch[0], end: lunch[1], label: 'Almoço' }] } : {}) })),
   // Dra. Patrícia — manhã consultas, tarde vacinação
   { pro: 'p5', days: [1, 2, 3, 4, 5], start: '08:00', end: '12:00', slotMin: 10, color: GREEN,      label: 'Consultas',     procs: ['pedia', 'retorno'], convenios: ['Particular', 'Bradesco Saúde'], doctoralia: true },
   { pro: 'p5', days: [2, 4],          start: '14:00', end: '16:00', slotMin: 15, color: '#b06400',  label: 'Vacinação',     procs: ['vacina'], convenios: ['Particular', 'Bradesco Saúde'] },
