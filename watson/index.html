@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Feegow · Nova Agenda · Watson</title>
+<link rel="icon" href="assets/symbol-feegow-primary.svg">
+<meta name="ext-resource-dependency" content="assets/symbol-feegow-primary.svg" data-resource-id="feegowSymbol" />
+<meta name="ext-resource-dependency" content="assets/icon-doctoralia.png" data-resource-id="doctoIcon" />
+<style>
+  @font-face { font-family: "InterVariable"; src: url("assets/fonts/InterVariable.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+  @font-face { font-family: "InterVariable"; src: url("assets/fonts/InterVariable-Italic.woff2") format("woff2"); font-weight: 100 900; font-style: italic; font-display: swap; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #f7f8f8; font-family: "InterVariable",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; font-weight: 450; font-size: 14px; line-height: 1.5; color: #242727; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  #root { height: 100%; }
+  button, input, select, textarea { font-family: inherit; }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-thumb { background: #d8dada; border-radius: 999px; border: 3px solid #ffffff; }
+  ::-webkit-scrollbar-thumb:hover { background: #afb4b4; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes wspin { to { transform: rotate(360deg); } }
+  @keyframes wtoast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  @keyframes drawerIn { from { transform: translateX(24px); opacity: .4; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes sheetUp { from { transform: translateY(40px); } to { transform: translateY(0); } }
+  @keyframes modalIn { from { transform: scale(.97); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+  button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid #00a085; outline-offset: 2px; }
+  @media (max-width: 991px) { html, body { font-size: 16px; } }
+
+  /* ---- FullCalendar × Watson (customer / web / light) ---------------------- */
+  .na-fc { --fc-border-color: #e8eaea; --fc-page-bg-color: #ffffff; --fc-neutral-bg-color: #f3f5f5; --fc-non-business-color: #f3f5f5;
+    --fc-today-bg-color: transparent; --fc-now-indicator-color: #ae2f25; --fc-highlight-color: #dff9f2; --fc-event-border-color: transparent;
+    --fc-event-bg-color: transparent; --fc-event-text-color: #242727; --fc-bg-event-opacity: 1; --fc-small-font-size: 12px;
+    --fc-list-event-hover-bg-color: #e8eaea99; --na-row: 60px; font-family: "InterVariable",system-ui,sans-serif; }
+  .na-fc .fc { font-size: 14px; }
+  .na-fc .fc-timegrid-slot { height: var(--na-row); }
+  .na-fc .fc-timegrid-slot-minor { border-top-style: dashed; }
+  .na-fc .fc-timegrid-slot-label { vertical-align: top; border-top-color: transparent; }
+  .na-fc .na-slot-label { display: inline-block; font-size: 12px; font-weight: 450; color: #888f8f; font-variant-numeric: tabular-nums; padding-top: 4px; }
+  .na-fc .fc-timegrid-axis-cushion, .na-fc .fc-timegrid-slot-label-cushion { padding: 0 8px; }
+  .na-fc .fc-timegrid-body { margin-top: 24px; } /* room for the grade label tab above the first slot */
+  .na-fc .fc-scrollgrid { border-left: 0; border-right: 0; }
+  .na-fc .fc-col-header-cell { background: #ffffff; vertical-align: top; }
+  .na-fc .fc-col-header-cell-cushion { display: block; padding: 0; color: inherit; text-decoration: none; }
+  .na-fc .fc-datagrid-cell-cushion, .na-fc .fc-col-header-cell .fc-scrollgrid-sync-inner { padding: 0; }
+  .na-fc .fc-timegrid-col-events { margin: 0 16px 0 2px; } /* 1rem right gutter = fit-in click zone (production) */
+  .na-fc .fc-v-event, .na-fc .fc-timegrid-event { background: transparent; border: 0; box-shadow: none; }
+  .na-fc .fc-timegrid-event-harness-inset .fc-timegrid-event { box-shadow: none; }
+  .na-fc .fc-timegrid-event .fc-event-main { padding: 0 0 2px 0; height: 100%; }
+  .na-fc .fc-event-main > .na-fc-node, .na-fc .fc-bg-event > .na-fc-node, .na-fc .na-fc-node { height: 100%; }
+  .na-fc .fc-timegrid-event-harness { padding-top: 1px; }
+  .na-fc .fc-bg-event { opacity: 1; background: transparent; }
+  .na-fc .fc-bg-event.na-bg-grade { pointer-events: none; overflow: visible; z-index: 5 !important; }
+  .na-fc .fc-timegrid-bg-harness:has(.na-bg-grade) { overflow: visible; }
+  .na-fc .na-bg-interval, .na-fc .na-bg-block, .na-fc .na-bg-free, .na-fc .na-bg-off { padding: 1px 2px 2px; box-sizing: border-box; }
+  .na-fc .fc-bg-event.na-bg-block, .na-fc .fc-bg-event.na-bg-free { pointer-events: auto; z-index: 3 !important; }
+  .na-fc .fc-timegrid-now-indicator-line { border-width: 2px 0 0; }
+  .na-fc .fc-timegrid-now-indicator-arrow { border-color: #ae2f25; border-top-color: transparent; border-bottom-color: transparent; }
+  .na-fc .fc-highlight { background: #dff9f2; }
+  .na-fc .fc-event-mirror { opacity: 1; }
+  .na-fc .fc-timegrid-event-harness:has(.fc-event-dragging) { opacity: .6; }
+  /* month (dayGrid) */
+  .na-fc-simple .fc-daygrid-day-frame { min-height: 104px; }
+  .na-fc-simple .fc-daygrid-day-top { display: block; }
+  .na-fc-simple .fc-daygrid-day-number { display: block; padding: 0; width: 100%; color: inherit; text-decoration: none; }
+  .na-fc-simple .fc-daygrid-day:hover { background: #e8eaea99; cursor: pointer; }
+  .na-fc-simple .fc-day-disabled { background: #f3f5f5; }
+  .na-fc-simple .fc-scrollgrid { border-radius: 16px; overflow: hidden; border: 1px solid #d8dada; background: #ffffff; }
+  .na-fc-simple .fc-col-header-cell { padding: 8px; }
+  /* list */
+  .na-fc-simple .fc-list { border: 0; }
+  .na-fc-simple .fc-list-day-cushion { background: #ffffff; padding: 0; }
+  .na-fc-simple .fc-list-event-time, .na-fc-simple .fc-list-event-graphic { display: none; }
+  .na-fc-simple .fc-list-event td { border-color: #e8eaea; padding: 0 8px; }
+  .na-fc-simple .fc-list-day > th { border-color: #e8eaea; }
+  .na-fc-simple .fc-list-empty { background: #ffffff; }
+  @media print {
+    body * { visibility: hidden !important; }
+    [data-print-area], [data-print-area] * { visibility: visible !important; }
+    [data-print-area] { position: absolute !important; left: 0; top: 0; width: 100%; height: auto !important; overflow: visible !important; padding: 0 !important; }
+    [data-print-only] { display: block !important; }
+    @page { margin: 16mm; }
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="16" fill="#006a59"/>
+      <rect x="26" y="26" width="48" height="48" rx="6" fill="#ffffff"/>
+      <rect x="26" y="26" width="48" height="11" rx="6" fill="#dff9f2"/>
+      <rect x="33" y="44" width="14" height="9" rx="2" fill="#6b81ee"/>
+      <rect x="52" y="44" width="14" height="9" rx="2" fill="#1b9a83"/>
+      <rect x="33" y="57" width="14" height="9" rx="2" fill="#c76c8f"/>
+      <rect x="52" y="57" width="14" height="9" rx="2" fill="#dff9f2"/>
+    </svg>
+  </template>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.21/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.21/locales/pt-br.global.min.js"></script>
+  <script>window.__WATSON_ICON_NAMES = new Set(["add-document", "add-phone", "add-visit", "ai-phone", "ai-sparkles", "alarm", "alarm-clock", "allergy", "ama", "amargentina-svg-a", "amazed", "amb", "android", "apple-color", "archive", "argentina", "arrow-down", "arrow-left", "arrow-right", "arrow-up", "assistive-technology", "asterisk", "back", "badge-like", "bank", "bank-note", "bca", "bcb", "bcbrazil-svg-a", "bcbrazil-svg-c", "bcbrazil-svg-d", "bcbrazil-svg-e", "bed", "bin", "blind", "book-open", "bookmark", "brazil", "bubble-chat", "bubble-chat-filled", "bubble-chat-text", "bubble-chat-texting", "bubble-q-and-a", "bulb", "calendar", "calendar-block", "calendar-filled", "calendar-off", "calendar-off-patients", "calendar-settings", "calendar-share", "calendar-with-check", "camera-circle", "camera-disabled", "camera-switch", "caret", "caret-left", "caret-right", "caret-top", "cdchile-svg-a", "chart", "chat-outline", "check", "check-filled", "checklist", "chile", "circle", "circle-filled", "click", "clinic", "clinic-cloud", "clip", "clipboard", "clock", "clock-filled", "close", "close-circle", "close-full", "code", "colombia", "connected", "copy", "cra", "crb", "crcolombia-svg-a", "credit-card", "credit-card-check", "credit-card-crossed", "credit-card-pending", "credit-card-reverted", "crutch", "cut", "czech-republic", "dangerous", "dba", "dbb", "dbczech-republic-svg-a", "deaf", "dental-chart", "devices", "diagnosis", "directions", "disabled-access", "disappointed", "discount", "diversity", "docplanner", "doctor", "documents", "dollar", "door", "dot-menu", "double-check", "double-check-filled", "download", "drag", "dropdown", "duplicate", "empty-star", "empty-star-thin", "end-call", "enlarge", "euro", "evgermany-svg-a", "excel", "facebook-circle", "facebook-circle-color", "facility", "feegow", "file", "file-badge", "file-image", "file-pdf", "file-text", "filters", "first-aid-plaster", "flower-star", "folder", "format-bold", "format-italic", "fwa", "fwitaly-svg-a", "gallery", "gauntlet-gloves", "germany", "gipo", "glassdoor-circle", "globe", "goal", "google", "google-color", "grmexico-svg-a", "half-heart", "half-star", "hamburger", "hand-bag", "hand-diamond", "happy-face", "health-checkup", "heart", "heart-filled", "hellip", "hide", "history", "home", "home-filled", "ida", "idb", "idc", "idd", "identifier", "idperu-svg-a", "idperu-svg-c", "idperu-svg-e", "in-progress", "infant", "info", "instagram-circle", "invoice", "ipa", "ipb", "ippoland-svg-a", "ira", "irb", "irportugal-svg-a", "italy", "jameda", "kpa", "kpb", "kpc", "kpd", "kpe", "kpspain-svg-a", "language", "layers", "leads", "left-panel-close", "left-panel-open", "letter-notification", "lifestyle", "linkedin-circle", "list-bullets", "list-numbers", "lock", "logout", "lpa", "lpb", "lpturkey-svg-a", "magic-wand", "magnifier-less", "magnifier-plus", "mail", "mail-filled", "megaphone", "messenger", "mexico", "microphone", "microphone-disabled", "microscope", "minimalize", "minus", "minus-circle", "mobile-phone", "monitor", "monitor-off", "move-visit", "near-me", "negative-filled", "neutral", "new-chat", "no-image", "no-user", "noa-booking", "noa-evidence", "noa-notes", "notes", "notifications", "office", "one", "ongoing", "open-in-full", "orthodontics", "out", "paper", "paper-plane", "parking", "patients", "pause", "payment-history", "pen", "pending", "people", "periodontal-chart", "peru", "pharmacy", "phone", "phone-call", "pill", "pin", "pin-bordered", "play", "play-filled", "plus", "plus-circle", "plus-filled", "poland", "popular", "portugal", "pregnant", "presentation-speech", "print", "priority-high", "priority-low", "priority-medium", "protect", "public-q-and-a", "publication", "puzzle", "qr-code", "question", "question-filled", "quill-write", "radio-button", "receipt", "receive-cash", "rectangle", "referral", "refresh", "refresh-filled", "reorder", "repeat", "reply", "reports", "request", "request-quote", "resume", "revert", "right-panel-close", "right-panel-open", "rounded-square", "rounded-square-filled", "saas-new-patient", "sad", "sand-clock", "scan-wi-fi", "school-graduation", "screenshot", "search", "settings", "share", "shield", "show", "smart", "smiling-face", "social-connection", "sort-ascending", "sort-descending", "spain", "speed-gauge", "spellcheck", "spinner", "spotify-circle", "star", "stethoscope", "stop", "support", "sync", "sync-disabled", "sync-problem", "sync-success", "tablet", "text", "three-stars", "thumb-down", "thumb-up", "thunder", "tiktok-circle", "transcript", "treatment", "trending-up", "trust", "tube", "tuo-tempo", "turkey", "twitter-circle", "unfold", "unlock", "upload", "user", "user-filled", "vaccine", "verified", "vertical-lines", "video-consultation", "view-agenda", "view-day", "view-grid", "view-speaker", "view-three-days", "view-week", "virtual-reality", "virus", "wallet", "warning", "warning-triangle", "web-accessibility", "whatsapp", "with-child", "wrap-text", "youtube-circle", "zloty"]);</script>
+
+  <script type="text/babel" src="src/tokens.jsx"></script>
+  <script type="text/babel" src="src/data.jsx"></script>
+  <script type="text/babel" src="src/primitives.jsx"></script>
+  <script type="text/babel" src="src/rules.jsx"></script>
+  <script type="text/babel" src="src/perms.jsx"></script>
+  <script type="text/babel" src="src/shell.jsx"></script>
+  <script type="text/babel" src="src/toolbar.jsx"></script>
+  <script type="text/babel" src="src/card.jsx"></script>
+  <script type="text/babel" src="src/fc-grid.jsx"></script>
+  <script type="text/babel" src="src/views.jsx"></script>
+  <script type="text/babel" src="src/agenda-config.jsx"></script>
+  <script type="text/babel" src="src/booking.jsx"></script>
+  <script type="text/babel" src="src/patient-tabs.jsx"></script>
+  <script type="text/babel" src="src/ops.jsx"></script>
+  <script type="text/babel" src="src/recurrence.jsx"></script>
+  <script type="text/babel" src="src/waitlist.jsx"></script>
+  <script type="text/babel" src="src/i18n.jsx"></script>
+  <script type="text/babel" src="src/tweaks-panel.jsx"></script>
+  <script type="text/babel" src="src/app.jsx"></script>
+</body>
+</html>

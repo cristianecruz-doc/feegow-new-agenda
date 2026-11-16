@@ -9,6 +9,24 @@ Interactive prototype of the redesigned Feegow agenda, exported from the
 |-----|-----------|-------|
 | https://cristianecruz-doc.github.io/feegow-new-agenda/ | **Default** — mirrors the Claude Design project (currently: waitlist / Lista de espera) | design, synced by the `design-to-github-pages` skill |
 | https://cristianecruz-doc.github.io/feegow-new-agenda/designer/ | Dev build — the docked/minimizable booking side panel (PR #2) | dev (@rafalziolek) |
+| https://cristianecruz-doc.github.io/feegow-new-agenda/watson/ | **Watson edition** — same functions as the default version, 100% Watson tokens and Watson icons, time grid on real FullCalendar 6.1.21 with the production config | design (Product Designer agent, 13/11/2026) |
+
+### `/watson` (Watson + FullCalendar edition)
+
+- Copy of the root version (13/11/2026, includes local patches 1–8) re-skinned on
+  `@dp-watson-web/tokens` 2.0.1 (customer/web/light). Every hex in `watson/src` and
+  `watson/index.html` exists in `watson-design-tokens.json`; the only derived value is the
+  approved 18% card tint (tag colour + alpha `2e`).
+- Icons: Watson iconography sprite (`watson/assets/watson-icons.svg`, from
+  `DocPlanner/iconography`). `WIcon` maps the old Lucide names (`LUCIDE_TO_WATSON` in
+  `watson/src/primitives.jsx`). Status icons are the ones production uses.
+- Grid: `watson/src/fc-grid.jsx`. Dia / Equipamentos / Salas = `resourceTimeGridDay`,
+  Semana = `timeGridWeek`, 30-min rows of 60 px at 100%, snap 5 min, no resize,
+  `slotEventOverlap: false`, blocks/breaks/working hours as background events. Mês and
+  Programação use the free `dayGridMonth` / `list` plugins and carry a
+  "Não está em produção" badge (production does not install them).
+- Review links: `?view=semana|mes|equip|sala|programacao`, `?pros=all`, `?free=1`.
+- A design sync must never touch `watson/`. Port root changes into it by hand.
 
 The two diverged in August 2026: the side panel exists only in the dev build,
 the waitlist only in the design project. Keeping both URLs means neither branch

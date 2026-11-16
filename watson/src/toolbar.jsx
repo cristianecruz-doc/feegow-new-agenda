@@ -1,0 +1,301 @@
+/* ============================================================================
+   Feegow — New Agenda · Agenda toolbar (SubNavbar)
+   View toggle · date nav + mini-calendar · filters · + Novo agendamento
+   ============================================================================ */
+
+const VIEW_OPTS = [
+  { value: 'dia',    label: 'Dia',         icon: 'columns-3' },
+  { value: 'semana', label: 'Semana',      icon: 'calendar-range' },
+  { value: 'mes',    label: 'Mês',         icon: 'calendar' },
+  { value: 'equip',  label: 'Equipamentos', icon: 'activity' },
+  { value: 'sala',   label: 'Salas',       icon: 'door-open' },
+  { value: 'programacao', label: 'Programação', icon: 'list' },
+];
+
+// generic filter button + popover
+function FilterChip({ icon, label, value, active, onClick, anchorId }) {
+  const ref = React.useRef(null);
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button ref={ref} id={anchorId} onClick={() => onClick(ref.current.getBoundingClientRect())}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px', borderRadius: WT.rM,
+        border: `1px solid ${active ? WT.borderAccent : WT.border}`, cursor: 'pointer', fontFamily: WT.font, fontSize: 14,
+        background: active ? WT.accentSoft : (hover ? WT.hover : '#ffffff'), color: active ? WT.accent : WT.fg, whiteSpace: 'nowrap',
+      }}>
+      <WIcon name={icon} size={15} color={active ? WT.accent : WT.muted} />
+      <span style={{ fontWeight: active ? WT.wEmph : WT.wBody }}>{value || label}</span>
+      <WIcon name="chevron-down" size={14} color={active ? WT.accent : WT.muted} />
+    </button>
+  );
+}
+
+// lista de filtro: mostra 5 (selecionados primeiro) + "Mostrar mais"; sem rolagem interna (uma única rolagem no popover).
+// cap: teto mesmo expandido (profissionais) — acima disso, só pela busca.
+function CheckList({ title, options: allOpts, selected, onToggle, onClear, count, searching, cap }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const norm = allOpts.map(o => (typeof o === 'string' ? { value: o, label: o } : o));
+  const ordered = searching ? norm : [...norm.filter(o => selected.includes(o.value)), ...norm.filter(o => !selected.includes(o.value))];
+  const nSel = norm.filter(o => selected.includes(o.value)).length;
+  const limit = searching ? ordered.length : Math.max(nSel, expanded ? (cap || ordered.length) : 5);
+  const options = ordered.slice(0, limit);
+  const hiddenCount = ordered.length - options.length;
+  const canExpand = !searching && !expanded && hiddenCount > 0;
+  const searchOnly = !searching && expanded && hiddenCount > 0;
+  const values = options.map(o => o.value);
+  const allOn = values.length > 0 && values.every(v => selected.includes(v));
+  const toggleAll = () => { if (allOn) onClear(); else values.forEach(v => { if (!selected.includes(v)) onToggle(v); }); };
+  return (
+    <div style={{ padding: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '4px 8px 8px' }}>
+        <span style={{ flex: 1, fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>{title}{count != null && <span style={{ fontWeight: WT.wBody, color: WT.muted }}> ({count})</span>}</span>
+        <button onClick={toggleAll} style={{ background: 'none', border: 'none', color: WT.accent, fontSize: 12, fontWeight: WT.wEmph, cursor: 'pointer', fontFamily: WT.font }}>{allOn ? 'Limpar' : 'Selecionar todos'}</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {options.map(o => {
+          const opt = typeof o === 'string' ? { value: o, label: o } : o;
+          const on = selected.includes(opt.value);
+          return (
+            <button key={opt.value} onClick={() => onToggle(opt.value)} style={{
+              display: 'flex', alignItems: 'center', gap: 12, padding: '8px 8px', borderRadius: WT.rM, border: 'none',
+              background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: WT.font, fontSize: 14, color: WT.fg,
+            }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <span style={{ width: 16, height: 16, borderRadius: WT.rS, flex: 'none', border: `1.5px solid ${on ? WT.accentFill : WT.borderHover}`, background: on ? WT.accentFill : '#ffffff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                {on && <WIcon name="check" size={12} color="#ffffff" strokeWidth={3} />}
+              </span>
+              {opt.swatch && <span style={{ width: 8, height: 8, borderRadius: '50%', background: opt.swatch }} />}
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {canExpand && <button onClick={() => setExpanded(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: '4px 0 0', padding: '4px 8px', border: 'none', background: 'none', cursor: 'pointer', fontFamily: WT.font, fontSize: 12, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="chevron-down" size={14} color={WT.accent} />Mostrar mais ({hiddenCount})</button>}
+      {expanded && !searching && <button onClick={() => setExpanded(false)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: '4px 0 0', padding: '4px 8px', border: 'none', background: 'none', cursor: 'pointer', fontFamily: WT.font, fontSize: 12, fontWeight: WT.wEmph, color: WT.accent }}><WIcon name="chevron-up" size={14} color={WT.accent} />Mostrar menos</button>}
+      {searchOnly && <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px 4px', fontSize: 12, color: WT.muted }}><WIcon name="search" size={12} color={WT.muted} />Mais {hiddenCount} — busque pelo nome para encontrar</div>}
+    </div>
+  );
+}
+
+// zoom da grade — refina a densidade em telas pequenas (1366×768, Windows 125%)
+function ZoomStepper({ value, onChange }) {
+  const clamp = z => Math.round(Math.max(0.5, Math.min(1.5, z)) * 100) / 100; // production: 50–150 %, 10 % steps
+  const btn = { width: 26, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', cursor: 'pointer', color: WT.fg2 };
+  React.useEffect(() => {
+    const h = e => { if (!(e.ctrlKey || e.metaKey)) return; if (e.key === '-') { e.preventDefault(); onChange(clamp(value - 0.1)); } else if (e.key === '=' || e.key === '+') { e.preventDefault(); onChange(clamp(value + 0.1)); } else if (e.key === '0') { e.preventDefault(); onChange(1); } };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, [value, onChange]);
+  return (
+    <div title="Zoom da grade (Ctrl + / Ctrl − / Ctrl 0)" style={{ display: 'inline-flex', alignItems: 'center', height: 32, border: `1px solid ${WT.border}`, borderRadius: WT.rM, background: '#ffffff', overflow: 'hidden' }}>
+      <button aria-label="Diminuir zoom" onClick={() => onChange(clamp(value - 0.1))} style={btn} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><WIcon name="minus" size={14} /></button>
+      <button onClick={() => onChange(1)} style={{ ...btn, width: 44, fontFamily: WT.font, fontSize: 12, fontWeight: WT.wEmph, color: value === 1 ? WT.muted : WT.accent, fontVariantNumeric: 'tabular-nums' }}
+        onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>{Math.round(value * 100)}%</button>
+      <button aria-label="Aumentar zoom" onClick={() => onChange(clamp(value + 0.1))} style={btn} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}><WIcon name="plus" size={14} /></button>
+    </div>
+  );
+}
+
+function Toolbar({ state, set, onNew, compact, cancelled = [], onOpenAppt }) {
+  const { view, date, filters, freeOnly, weekMode } = state;
+  const mvp = !!window.__mvp;
+  const ed = window.__ed || { final: true, conv: true, rooms: true, equip: true };
+  const viewOpts = ed.final ? VIEW_OPTS : VIEW_OPTS.filter(v => v.value === 'dia' || v.value === 'semana' || (v.value === 'equip' && ed.equip) || (v.value === 'sala' && ed.rooms));
+  const [pop, setPop] = React.useState(null); // {kind, rect}
+  const [fq, setFq] = React.useState('');      // busca dentro do popover de filtros
+  const open = (kind, rect) => setPop(p => (p && p.kind === kind ? null : { kind, rect }));
+  const close = () => { setPop(null); setFq(''); };
+
+  const dateLabel = view === 'semana'
+    ? `${fmtShortDate(state.date)} – ${fmtShortDate(dateUtil.addDays(dateUtil.weekDaysOf(date)[5], 0))}`
+    : view === 'mes' ? `${MONTHS[parseISO(date).getMonth()]} ${parseISO(date).getFullYear()}`
+    : fmtLongDate(date);
+
+  const specs = PROS.flatMap(p => specsOf(p)).filter((v, i, a) => a.indexOf(v) === i);
+  // um profissional se encaixa no conjunto de filtros (especialidade + sala + convênio)?
+  const proFitsFilters = (p, f) => {
+    const sp = f.spec || [], rm = f.room || [], un = f.unit || [], cv = f.conv || [], pc = f.proc || [];
+    if (sp.length && !sp.some(s => proHasSpec(p, s))) return false;
+    if (rm.length && !rm.includes(p.room)) return false;
+    if (un.length && !un.includes(p.unit)) return false;
+    if (cv.length && !cv.some(c => dayAcceptsCond(p.id, date, { conv: c }))) return false;
+    if (pc.length && !pc.some(id => dayAcceptsCond(p.id, date, { procId: id }))) return false;
+    return true;
+  };
+  // Profissionais elegíveis: só os que se encaixam na especialidade / sala selecionadas
+  const eligiblePros = PROS.filter(p => proFitsFilters(p, filters));
+  const proOpts = eligiblePros.map(p => ({ value: p.id, label: p.name, swatch: p.color }));
+
+  const toggleFilter = (key, val) => set(s => {
+    const cur = s.filters[key] || [];
+    const nextVals = cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val];
+    const nextFilters = { ...s.filters, [key]: nextVals };
+    // ao mudar especialidade/unidade/sala/convênio, seleciona automaticamente TODOS os profissionais que se encaixam (interseção)
+    if (key === 'spec' || key === 'unit' || key === 'room' || key === 'conv' || key === 'proc') {
+      const sp = nextFilters.spec || [], un = nextFilters.unit || [], rm = nextFilters.room || [], cv = nextFilters.conv || [], pc = nextFilters.proc || [];
+      nextFilters.pros = (sp.length || un.length || rm.length || cv.length || pc.length)
+        ? PROS.filter(p => proFitsFilters(p, nextFilters)).map(p => p.id)
+        : null; // sem restrições → volta a mostrar todas as agendas
+    }
+    return { filters: nextFilters };
+  });
+  const clearFilter = key => set(s => ({ filters: { ...s.filters, [key]: key === 'pros' ? null : [] } }));
+  const clearAll = () => set({ filters: { pros: null, spec: [], conv: [], unit: [], room: [], proc: [] }, freeOnly: false });
+  const arr = k => filters[k] || [];
+  // seleção de agendas vive na barra lateral — não conta como filtro ativo
+  const activeCount = (state.agendasPlacement === 'sidebar' ? 0 : arr('pros').length) + arr('spec').length + arr('conv').length + arr('unit').length + arr('room').length + arr('proc').length + (freeOnly ? 1 : 0);
+  // procedimentos ordenados por uso (clínicas reais têm +15k → mostra só top 10 até o usuário buscar)
+  const PROC_USAGE = React.useMemo(() => { const c = {}; (window.ALL_APPTS || []).forEach(a => ((a.procs && a.procs.length) ? a.procs : (a.proc ? [a.proc] : [])).forEach(id => { c[id] = (c[id] || 0) + 1; })); return c; }, []);
+  const procsByUse = React.useMemo(() => PROC_LIST.slice().sort((a, b) => (PROC_USAGE[b.id] || 0) - (PROC_USAGE[a.id] || 0)), [PROC_USAGE]);
+
+  // opções do popover, com busca (mesmo padrão da aba de recursos)
+  const ql = fq.trim().toLowerCase();
+  const matchq = s => !ql || String(s).toLowerCase().includes(ql);
+  const rooms = [...new Set(PROS.map(p => p.room))];
+  const fProOpts = proOpts.filter(o => matchq(o.label));
+  const fSpecs = specs.filter(matchq);
+  const fConv = CONVENIOS.filter(matchq);
+  const fUnits = UNITS.filter(matchq);
+  const fRooms = rooms.filter(matchq);
+  // procedimentos: ordenados por uso; lista mostra 5, "Mostrar mais" até 10, o resto pela busca
+  const fProcs = ql ? procsByUse.filter(p => matchq(p.name)) : procsByUse;
+  const noResults = ql && !fProOpts.length && !fSpecs.length && !fConv.length && !fUnits.length && !fRooms.length && !fProcs.length;
+
+  return (
+    <div style={{ flex: 'none', background: WT.raised, borderBottom: `1px solid ${WT.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      {/* left: date navigation */}
+      <WButton variant="default" label="Hoje" onClick={() => set({ date: TODAY })} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <WIconButton name="chevron-left" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? -7 : view === 'mes' ? -30 : -1) }))} />
+        <WIconButton name="chevron-right" onClick={() => set(s => ({ date: dateUtil.addDays(s.date, view === 'semana' ? 7 : view === 'mes' ? 30 : 1) }))} />
+      </div>
+      <button onClick={e => open('cal', e.currentTarget.getBoundingClientRect())} style={{
+        display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px', borderRadius: WT.rM,
+        border: `1px solid transparent`, background: 'transparent', cursor: 'pointer', fontFamily: WT.font, fontSize: 16, color: WT.fg, fontWeight: WT.wHead, textTransform: 'capitalize',
+      }} onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+        <WIcon name="calendar-days" size={17} color={WT.accent} />
+        {!compact && dateLabel}
+        <WIcon name="chevron-down" size={14} />
+      </button>
+
+      {/* cancelados do período — fora da grade; o pill mostra só a quantidade */}
+      {cancelled.length > 0 && view !== 'mes' && (
+        <button onClick={e => open('cancel', e.currentTarget.getBoundingClientRect())} title="Agendamentos cancelados neste período" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px', borderRadius: WT.pill, marginLeft: 4,
+          border: `1px solid ${pop && pop.kind === 'cancel' ? WT.borderHover : WT.border}`, background: pop && pop.kind === 'cancel' ? WT.inset : '#ffffff', cursor: 'pointer', fontFamily: WT.font, fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2, whiteSpace: 'nowrap',
+        }}>
+          <WIcon name="x-circle" size={14} color={WT.muted} />{cancelled.length} {compact ? '' : (cancelled.length === 1 ? 'cancelado' : 'cancelados')}
+        </button>
+      )}
+
+      <div style={{ flex: 1 }} />
+
+      {/* right: view tabs · filtros · ajustes · novo */}
+      {compact
+        ? <WSelect value={view} onChange={v => set({ view: v })} options={viewOpts} placeholder="" style={{ width: 140 }} />
+        : <WSegmented options={viewOpts} value={view} onChange={v => set({ view: v })} />}
+
+      <button onClick={e => open('filters', e.currentTarget.getBoundingClientRect())} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 12px', borderRadius: WT.rM,
+        border: `1px solid ${activeCount ? WT.borderAccent : WT.border}`, cursor: 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph,
+        background: activeCount ? WT.accentSoft : '#ffffff', color: activeCount ? WT.accent : WT.fg, whiteSpace: 'nowrap',
+      }}>
+        <WIcon name="filter" size={15} color={activeCount ? WT.accent : WT.muted} />
+        {!compact && 'Filtros'}
+        {activeCount > 0 && <span style={{ minWidth: 18, height: 18, padding: '0 4px', borderRadius: WT.pill, background: WT.accentFill, color: '#ffffff', fontSize: 12, fontWeight: WT.wHead, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{activeCount}</span>}
+      </button>
+
+      {view !== 'mes' && <ZoomStepper value={state.zoom || 1} onChange={z => set({ zoom: z })} />}
+
+      <WIconButton name="sliders-horizontal" title="Configurações de visualização" active={pop && pop.kind === 'viewcfg'} onClick={e => open('viewcfg', e.currentTarget.getBoundingClientRect())} />
+
+      {pop && pop.kind === 'cancel' && (
+        <WPopover anchorRect={pop.rect} onClose={close} width={340} placement="below">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px 8px', borderBottom: `1px solid ${WT.borderSub}` }}>
+            <WIcon name="x-circle" size={15} color={WT.muted} />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: WT.wHead, color: WT.fg }}>Cancelados</span>
+            <span style={{ fontSize: 12, color: WT.muted }}>{view === 'semana' ? 'nesta semana' : 'neste dia'}</span>
+          </div>
+          <div style={{ maxHeight: 320, overflow: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {cancelled.map(a => {
+              const pt = patientById(a.pt) || { name: a._patientName || 'Paciente' };
+              const pro = PROS.find(p => p.id === a.pro) || {};
+              const procs = ((a.procs && a.procs.length) ? a.procs : (a.proc ? [a.proc] : [])).map(id => (PROCS[id] || {}).name).filter(Boolean).join(', ');
+              return (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 8px', borderRadius: WT.rM }}
+                  onMouseEnter={e => e.currentTarget.style.background = WT.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <span style={{ flex: 'none', fontSize: 12, fontWeight: WT.wHead, color: WT.fg2, fontVariantNumeric: 'tabular-nums', width: view === 'semana' ? 74 : 38 }}>{view === 'semana' ? `${dateUtil.fmtShortDate(a.date)} ${a.start}` : a.start}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 14, fontWeight: WT.wEmph, color: WT.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: 'line-through', textDecorationColor: WT.muted }}>{pt.name}</span>
+                    <span style={{ display: 'block', fontSize: 12, color: WT.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[procs, pro.short, a.reason].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  <WButton size="s" variant="default" label="Abrir" onClick={() => { close(); onOpenAppt && onOpenAppt(a); }} />
+                </div>
+              );
+            })}
+          </div>
+        </WPopover>
+      )}
+      {pop && pop.kind === 'cal' && (
+        <WPopover anchorRect={pop.rect} onClose={close} width={260} placement="below">
+          <div style={{ borderBottom: `1px solid ${WT.borderSub}`, padding: '4px 4px 0' }} />
+          <MiniCalendar value={date} onSelect={iso => { set({ date: iso }); close(); }} />
+        </WPopover>
+      )}
+      {pop && pop.kind === 'filters' && (
+        <WPopover anchorRect={pop.rect} onClose={close} width={300} placement="below">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px 8px', borderBottom: `1px solid ${WT.borderSub}` }}>
+            <span style={{ flex: 1, fontSize: 14, fontWeight: WT.wHead, color: WT.fg }}>Filtros</span>
+            {activeCount > 0 && <button onClick={clearAll} style={{ background: 'none', border: 'none', color: WT.accent, fontSize: 12, fontWeight: WT.wEmph, cursor: 'pointer', fontFamily: WT.font }}>Limpar tudo</button>}
+          </div>
+          <div style={{ padding: '8px 12px 8px', borderBottom: `1px solid ${WT.borderSub}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 4px 0 8px', borderRadius: WT.rM, border: `1px solid ${WT.border}`, background: '#ffffff' }}>
+              <WIcon name="search" size={16} />
+              <input autoFocus value={fq} onChange={e => setFq(e.target.value)} placeholder="Buscar profissional, especialidade, convênio, unidade, sala…"
+                style={{ border: 'none', outline: 'none', font: `${WT.wBody} 14px ${WT.font}`, flex: 1, background: 'transparent', color: WT.fg, minWidth: 0 }} />
+              {fq && <WIconButton name="x" dim={24} onClick={() => setFq('')} />}
+            </div>
+          </div>
+          <div style={{ maxHeight: 380, overflow: 'auto' }}>
+            {!ql && (
+              <div style={{ padding: '8px 12px', borderBottom: `1px solid ${WT.borderSub}` }}>
+                <WToggle checked={freeOnly} onChange={v => set({ freeOnly: v })} label="Somente horários livres" />
+              </div>
+            )}
+            {noResults && <div style={{ padding: '24px 12px', fontSize: 14, color: WT.muted, textAlign: 'center' }}>Nenhum resultado para “{fq}”.</div>}
+            {fProOpts.length > 0 && <CheckList searching={!!ql} title="Profissionais" count={eligiblePros.length} cap={PRO_LIST_LIMIT} options={fProOpts} selected={arr('pros')} onToggle={v => toggleFilter('pros', v)} onClear={() => clearFilter('pros')} />}
+            {fSpecs.length > 0 && <><WDivider /><CheckList searching={!!ql} title="Especialidade" options={fSpecs} selected={arr('spec')} onToggle={v => toggleFilter('spec', v)} onClear={() => clearFilter('spec')} /></>}
+            {fUnits.length > 0 && <><WDivider /><CheckList searching={!!ql} title="Unidade" options={fUnits} selected={arr('unit')} onToggle={v => toggleFilter('unit', v)} onClear={() => clearFilter('unit')} /></>}
+            {fConv.length > 0 && ed.conv && <><WDivider /><CheckList searching={!!ql} title="Convênio" options={fConv} selected={arr('conv')} onToggle={v => toggleFilter('conv', v)} onClear={() => clearFilter('conv')} /></>}
+            {fRooms.length > 0 && ed.rooms && <><WDivider /><CheckList searching={!!ql} title="Sala" options={fRooms} selected={arr('room')} onToggle={v => toggleFilter('room', v)} onClear={() => clearFilter('room')} /></>}
+            {fProcs.length > 0 && <><WDivider /><CheckList searching={!!ql} title={ql ? 'Procedimento' : 'Procedimento · mais usados'} cap={10} options={fProcs.map(p => ({ value: p.id, label: p.name }))} selected={arr('proc')} onToggle={v => toggleFilter('proc', v)} onClear={() => clearFilter('proc')} /></>}
+          </div>
+        </WPopover>
+      )}
+      {pop && pop.kind === 'viewcfg' && (
+        <WPopover anchorRect={pop.rect} onClose={close} width={264} placement="below">
+          <div style={{ padding: '12px 16px 4px', fontSize: 14, fontWeight: WT.wHead, color: WT.fg }}>Configurações de visualização</div>
+          <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Indicação de cor do profissional</span>
+              <WSegmented value={state.cardStyle} onChange={v => set({ cardStyle: v })}
+                options={[{ value: 'typebar', label: 'Barra' }, { value: 'filled', label: 'Preenchido' }]} />
+            </div>
+            <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Altura da hora</span>
+              <WSegmented value={state.density || 'auto'} onChange={v => set({ density: v })}
+                options={[{ value: 'auto', label: 'Auto' }, { value: 'compact', label: 'Compacta' }, { value: 'normal', label: 'Média' }, { value: 'comfortable', label: 'Alta' }]} />
+              <span style={{ fontSize: 12, color: WT.muted }}>Auto ajusta a densidade à altura da tela. O zoom da barra superior refina em cima disso.</span>
+            </div>
+            <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Sinalizadores no card</span>
+              <WToggle checked={state.showPriorityFlags !== false} onChange={v => set({ showPriorityFlags: v })} label="Exibir ícones de prioridade" />
+              <WToggle checked={state.showNewPatientFlag !== false} onChange={v => set({ showNewPatientFlag: v })} label="Exibir ícone de novo paciente" />
+            </div>
+          </div>
+        </WPopover>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { Toolbar, VIEW_OPTS, FilterChip, CheckList });
