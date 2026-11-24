@@ -18,6 +18,8 @@ const CFG_DEFAULTS = {
   AlterarStatusAgendamento: false,
   AlterarStatusAgendamentoPara: 'faltou',
   ContasAPagarCancelamento: false,
+  RetornoPadrao: RET_PADRAO_DEFAULT,
+  RetornoRegras: RET_RULES_DEFAULT,
 };
 // Configurações que existem já no MVP / V0.1; Expansion soma a carteirinha de convênio; as demais só valem na Final
 const CFG_MVP = ['NaoExibirNaAgendaOsStatus', 'ColorirLinhaAgendamento', 'OcultarBotaoRetorno', 'CPFBuscaPaciente', 'PermitirRemarcarSemGrade'];
@@ -97,6 +99,7 @@ const CFG_SECTIONS = [
   { id: 's1', n: 1, icon: 'calendar-days', title: 'Visualização da agenda', desc: 'O que aparece na grade e como cada agendamento é desenhado.' },
   { id: 's2', n: 2, icon: 'calendar-plus', title: 'Marcação de agendamento', desc: 'Regras aplicadas no momento de agendar.' },
   { id: 's3', n: 3, icon: 'calendar-clock', title: 'Remarcação, status e cancelamento', desc: 'O que acontece depois que o agendamento já existe.' },
+  { id: 's4', n: 4, icon: 'rotate-ccw', title: 'Retorno', desc: 'Período de retorno, procedimento de retorno e o que acontece quando o paciente falta.' },
 ];
 
 function cfgSettings() {
@@ -118,14 +121,25 @@ function cfgSettings() {
       </CfgPreview>,
     },
     {
-      sec: 's1', key: 'OcultarBotaoRetorno', title: 'Ocultar botão de Retorno',
-      desc: 'Remove a ação de marcar retorno, para clínicas que não trabalham com retornos.',
-      control: (v, set) => <WToggle checked={!!v} onChange={set} />,
+      sec: 's4', key: 'OcultarBotaoRetorno', title: 'Usar controle de retorno',
+      desc: 'Ao escolher o paciente, a agenda avisa se ele está em período de retorno e sugere o retorno com o mesmo profissional. O cartão da consulta atendida ganha o botão Agendar retorno. Desligue se a clínica não trabalha com retornos.',
+      control: (v, set) => <WToggle checked={!v} onChange={nv => set(!nv)} />,
       preview: v => <CfgPreview>
         <span style={{ fontSize: 12, color: WT.muted }}>Ações do card:</span>
-        <PrevCard color={WT.fg2} label="Remarcar" /><PrevCard color={WT.fg2} label="Cancelar" />
-        {v ? <PrevCard ghost label="Retorno" /> : <PrevCard color={WT.accent} label="Retorno" />}
+        <PrevCard color={WT.fg2} label="Remarcar" />
+        {v ? <PrevCard ghost label="Agendar retorno" /> : <PrevCard color={WT.accent} label="Agendar retorno" />}
       </CfgPreview>,
+    },
+    {
+      sec: 's4', key: 'RetornoPadrao', final: true, title: 'Padrão de retorno da clínica',
+      desc: 'Vale para os procedimentos sem dias ou sem procedimento de retorno próprios. O período conta do dia da consulta (dia 0) até o último dia.',
+      control: (v, set) => <RetPadraoControl value={v} onChange={set} />,
+    },
+    {
+      sec: 's4', key: 'RetornoRegras', final: true, title: 'Retorno por procedimento e por convênio',
+      desc: 'Quais procedimentos oferecem retorno, com quantos dias e qual procedimento de retorno é agendado. Os dias do convênio vencem os do procedimento.',
+      control: () => null,
+      extra: (cfg, setCfg) => <RetRegrasTable value={cfg.RetornoRegras} onChange={v => setCfg({ RetornoRegras: v })} />,
     },
     {
       sec: 's2', key: 'validadeconveniovencido', final: true, title: 'Exigir carteirinha do convênio válida',
@@ -158,8 +172,8 @@ function cfgSettings() {
       control: (v, set) => <WToggle checked={!!v} onChange={set} />,
     },
     {
-      sec: 's3', key: 'bloqueioretornofaltoso', final: true, title: 'Bloquear remarcação de retorno após falta',
-      desc: 'Pacientes que faltaram não conseguem remarcar o retorno gratuito.',
+      sec: 's4', key: 'bloqueioretornofaltoso', final: true, title: 'Não liberar novo retorno após falta',
+      desc: 'Se o paciente faltar ao retorno, a consulta de origem não libera outro retorno. A recepção agenda uma consulta normal.',
       control: (v, set) => <WToggle checked={!!v} onChange={set} />,
     },
     {
@@ -238,7 +252,7 @@ function AgendaConfigPage({ cfg, setCfg, resetSection, onBack, onSimulateDayEnd 
             <WInput value={q} onChange={setQ} placeholder="Buscar configuração…" prefixIcon="search" size="l" />
           </div>
           <span style={{ fontSize: 12, color: WT.muted }}>
-            {window.__ed && window.__ed.id === 'mvp' ? '5 configurações nesta versão (MVP · V0.1)' : window.__ed && window.__ed.id === 'expansion' ? '6 configurações nesta versão (Expansion · V0.2)' : '11 configurações · 6 chegam na versão Final'}
+            {window.__ed && window.__ed.id === 'mvp' ? '5 configurações nesta versão (MVP · V0.1)' : window.__ed && window.__ed.id === 'expansion' ? '6 configurações nesta versão (Expansion · V0.2)' : '13 configurações · 8 chegam na versão Final'}
           </span>
         </div>
 

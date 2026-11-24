@@ -65,6 +65,7 @@ function App() {
 
 
   const [appts, setAppts] = React.useState(() => ALL_APPTS.map(a => ({ ...a })));
+  window.__appts = appts;   // regras de retorno (retorno.jsx) leem os agendamentos atuais
   const [blocks, setBlocks] = React.useState(() => SEED_BLOCKS.map(b => ({ ...b })));
   // review links: ?view=semana&pros=all&free=1 opens a given state (used for the Watson report screenshots)
   const __q = new URLSearchParams(location.search);
@@ -162,6 +163,7 @@ function App() {
       price: sumPrice, fitIn: !!fitIn, note: form && form.notas ? form.notas : null, equip: equip || null,
       channel: form ? form.canal : 'Balcão', room: room || (form ? form.local : null),
       _patientName: patient && patient.patientName, isNewPt: patient && patient.isNew, linkedFrom: (form && form._linkedFrom) || null,
+      retornoDe: (form && ids.some(isRetProc) && form.retornoDe) || null, retMotivo: (form && ids.some(isRetProc) && !form.retornoDe && form.retMotivo) || null,
       series: series || null, seriesRule: seriesRule || null, seriesSeq: seriesSeq || null,
     };
     setAppts(s => [...s, na]);
@@ -280,7 +282,8 @@ function App() {
       const ids = new Set(seriesTargets(init.appt, init.scope || 'one'));
       const sumDur = form.procIds.reduce((s, id) => s + ((PROCS[id] || {}).dur || 0), 0);
       const sumPrice = form.procIds.reduce((s, id) => s + ((PROCS[id] || {}).price || 0), 0);
-      setAppts(s => s.map(x => ids.has(x.id) ? { ...x, pro: form.proId, start: form.time, proc: form.procIds[0], procs: form.procIds, dur: sumDur || x.dur, price: sumPrice, room: form.local, note: form.notas || x.note, date: x.id === init.appt.id ? form.date : x.date, ...(x.id === init.appt.id && (init.scope || 'one') === 'one' && x.series ? { series: null, seriesRule: null, seriesSeq: null } : {}) } : x));
+      const isRetF = form.procIds.some(isRetProc);
+      setAppts(s => s.map(x => ids.has(x.id) ? { ...x, pro: form.proId, start: form.time, proc: form.procIds[0], procs: form.procIds, dur: sumDur || x.dur, price: sumPrice, room: form.local, note: form.notas || x.note, retornoDe: isRetF ? (form.retornoDe || null) : null, retMotivo: isRetF && !form.retornoDe ? (form.retMotivo || null) : null, date: x.id === init.appt.id ? form.date : x.date, ...(x.id === init.appt.id && (init.scope || 'one') === 'one' && x.series ? { series: null, seriesRule: null, seriesSeq: null } : {}) } : x));
       setBooking(null); setDraft(null);
       const pt = patientById(init.appt.pt) || { name: 'Paciente' };
       flash(ids.size > 1 ? `${ids.size} agendamentos da série atualizados` : `Agendamento atualizado · ${pt.name}`);
@@ -342,17 +345,6 @@ function App() {
   function doReschedule(a) {
     const r0 = ruleEdit(a, a.date, 'remarcar');
     if (r0.block) { setCtxCard(null); setRuleBlock({ title: r0.title, text: r0.block }); return; }
-    // Configuração: bloquear remarcação de retorno de paciente faltoso
-    const pt = patientById(a.pt) || {};
-    const isRet = apptProcIds(a).includes('retorno');
-    if (cfgGet('bloqueioretornofaltoso') && isRet && (pt.noShows || 0) > 0) {
-      setCtxCard(null);
-      setRuleBlock({
-        title: 'Remarcação de retorno bloqueada',
-        text: `${pt.name || 'O paciente'} tem ${pt.noShows} falta${pt.noShows > 1 ? 's' : ''} registrada${pt.noShows > 1 ? 's' : ''}. A clínica não permite remarcar o retorno gratuito nesse caso — agende uma nova consulta.`,
-      });
-      return;
-    }
     setCtxCard(null); setReschedule({ a, prevFreeOnly: app.freeOnly }); set({ freeOnly: true });
   }
   function cancelReschedule() { if (reschedule) set({ freeOnly: reschedule.prevFreeOnly }); setReschedule(null); }
@@ -367,6 +359,8 @@ function App() {
       setRuleBlock({ title: 'Dia sem agenda aberta', text: `${p.name || 'O profissional'} não tem grade de atendimento em ${fmtShortDate(date)}. Escolha um dia com agenda aberta ou ative “Permitir remarcar em dia sem agenda aberta” nas configurações.` });
       return;
     }
+    // retorno: a nova data precisa estar dentro do período da consulta de origem
+    const rb = retDateBlock(a, date); if (rb) { setRuleBlock(rb); return; }
     // validação: profissional de destino atende convênio/serviço?
     if (newPro && newPro !== a.pro) {
       const conv = a.conv || 'Particular';
@@ -421,11 +415,24 @@ function App() {
     setTimeout(() => flash(n ? `${n} agendamento${n > 1 ? 's' : ''} atualizado${n > 1 ? 's' : ''} para ${st.label}` : 'Nenhum agendamento pendente hoje'), 0);
   }
 
+  // retorno: abre o agendamento já ligado à consulta de origem, com o mesmo profissional,
+  // o procedimento de retorno da origem e o primeiro horário livre dentro do período
   function doRetorno(a) {
     setCtxCard(null);
     if (!perm.book) { setRuleBlock({ title: 'Sem permissão', text: PERM_MSG.book }); return; }
     const pt = patientById(a.pt) || {};
-    openBooking({ date: state.date, time: a.start, proId: a.pro, procIds: ['retorno'], patient: { patientId: a.pt, patientName: pt.name || a._patientName, isNew: false } });
+    const info = retOriginInfo(a, TODAY, appts);
+    const procId = info ? info.retProc : 'retorno';
+    const slot = info ? retNextSlots(a.pro, TODAY, info.until, procId, appts, 1)[0] : null;
+    openBooking({ date: slot ? slot.date : TODAY, time: slot ? slot.time : a.start, proId: a.pro, procIds: [procId], retornoDe: a.id, patient: { patientId: a.pt, patientName: pt.name || a._patientName, isNew: false } });
+  }
+  // retorno remarcado/arrastado para depois do fim do período da origem → bloqueia (legado: Remarcar.asp)
+  function retDateBlock(a, date) {
+    if (!a.retornoDe || !apptIsRet(a)) return null;
+    const o = appts.find(x => x.id === a.retornoDe); if (!o) return null;
+    const w = retWindow(o); const until = retAddDays(o.date, w.dias);
+    if (date <= until && date >= o.date) return null;
+    return { title: 'Fora do período de retorno', text: `Este retorno é da consulta de ${retFmt(o.date)} e vale até ${retFmt(until)} (${w.dias} dias, ${w.fonte}). Escolha uma data até ${retFmt(until)} ou agende uma consulta normal.` };
   }
 
   // Coluna de destino é de um profissional? (validação de convênio/serviço só vale p/ médico)
@@ -443,6 +450,7 @@ function App() {
     applyDropNow(a, colId, min, slot);
   }
   function applyDropNow(a, colId, min, slot) {
+    const rb = retDateBlock(a, slot.date || a.date); if (rb) { setRuleBlock(rb); setDrag({ appt: null }); return; }
     // ---- validação: o médico de destino atende o convênio e realiza o serviço? ----
     const tPro = targetProOf(colId);
     if (tPro && tPro !== a.pro) {

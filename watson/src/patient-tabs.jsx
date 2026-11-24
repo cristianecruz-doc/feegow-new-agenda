@@ -165,7 +165,7 @@ function HistRow({ a, online }) {
   const st = STATUS[a.status] || STATUS.marcado;
   const pro = PROS.find(p => p.id === a.pro) || {};
   const equip = a.equip ? (EQUIP.find(e => e.id === a.equip) || {}).initials : null;
-  const isRetorno = (a.procs && a.procs.length ? a.procs : [a.proc]).includes('retorno');
+  const isRetorno = apptIsRet(a);
   const valor = a.plano ? a.conv : (a.price ? brl(a.price) : 'Particular');
   const dt = dateUtil.parseISO(a.date);
   const dataStr = `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} · ${a.start}`;

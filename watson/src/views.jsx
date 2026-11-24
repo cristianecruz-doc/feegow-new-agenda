@@ -796,7 +796,7 @@ function ProgRow({ a }) {
   const st = STATUS[a.status] || STATUS.marcado;
   const pro = PROS.find(p => p.id === a.pro) || {};
   const pt = patientById(a.pt) || { name: a._patientName || 'Paciente' };
-  const isRet = (a.procs && a.procs.length ? a.procs : [a.proc]).includes('retorno');
+  const isRet = apptIsRet(a);
   const online = _pseed ? false : false;
   const valor = a.plano ? a.conv : (a.price ? brl(a.price) : 'Particular');
   return (

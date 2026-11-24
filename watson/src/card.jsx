@@ -411,7 +411,11 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
   const pt = patientById(a.pt) || { name: a.pt };
   const t = apptColors(a); const st = STATUS[a.status];
   const canEdit = permOf('edit');
-  const showRetorno = !cfgGet('OcultarBotaoRetorno') && !window.__mvp && permOf('book');
+  // retorno: só na consulta Atendida cujo procedimento oferece retorno e que ainda está no período
+  const retInfo = retEnabled() ? retOriginInfo(a, TODAY) : null;
+  const showRetorno = !!retInfo && retInfo.state === 'valido' && permOf('book');
+  const retLbl = !window.__mvp ? retLabel(a) : null;
+  const retStateTxt = retInfo && ({ valido: `Período de retorno até ${retFmt(retInfo.until)}`, usado: retInfo.used ? `Retorno agendado para ${retFmt(retInfo.used.date)}` : 'Retorno agendado', faltou: retInfo.used ? `Faltou ao retorno de ${retFmt(retInfo.used.date)}` : 'Faltou ao retorno', vencido: `Período de retorno encerrado em ${retFmt(retInfo.until)}` })[retInfo.state];
   const pro = PROS.find(p => p.id === a.pro) || EQUIP.find(e => e.id === a.pro) || {};
   const end = fmtMin(toMin(a.start) + a.dur);
   const Row = ({ icon, children }) => (
@@ -483,6 +487,8 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
             <WProfileAvatar src={pro.photo} size={20} icon={pro.spec ? 'user-round' : 'activity'} />
             <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pro.short || pro.name}</span>
           </div>
+          {retLbl && <MetaRow icon="rotate-ccw" color={WT.accent}>{retLbl}</MetaRow>}
+          {retStateTxt && <MetaRow icon="rotate-ccw" color={retInfo.state === 'valido' ? WT.fg : WT.fg2}>{retStateTxt}</MetaRow>}
           {a.note && <MetaRow icon="sticky-note" color={WT.fg2}>{a.note}</MetaRow>}
           {a.reason && a.status === 'cancelado' && <MetaRow icon="info" color={WT.danger}>{a.reason}</MetaRow>}
           {a.reason && (a.status === 'remarcado' || a.rescheduledFrom) && <MetaRow icon="calendar-clock" color={STATUS.remarcado.fg}>{a.reason}</MetaRow>}
@@ -509,7 +515,7 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
         {(canEdit || showRetorno) && (
           <div style={{ display: 'grid', gridTemplateColumns: canEdit && showRetorno ? '1fr 1fr' : '1fr', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}` }}>
             {canEdit && <WButton variant="default" leadingIcon="calendar-clock" label="Remarcar" onClick={() => onReschedule(a)} />}
-            {showRetorno && <WButton variant="default" label="Retorno" onClick={() => onRetorno && onRetorno(a)} />}
+            {showRetorno && <WButton variant="default" leadingIcon="rotate-ccw" label="Agendar retorno" onClick={() => onRetorno && onRetorno(a)} />}
           </div>
         )}
         {!canEdit && (

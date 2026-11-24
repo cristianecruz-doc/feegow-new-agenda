@@ -158,6 +158,9 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
   const grade = gradeAt(proId, ctx.date, time);
   // procedimentos permitidos pela grade do médico nesse horário
   const allowedProcs = grade && grade.procs ? PROC_LIST.filter(p => grade.procs.includes(p.id)) : PROC_LIST;
+  // retorno: aviso ao escolher o paciente; procedimento do tipo Retorno pede a origem no formulário completo
+  const qOrigins = retEnabled() && patient && patient.patientId ? retOrigins(patient.patientId, ctx.date) : [];
+  const qSelRet = retEnabled() && procIds.some(isRetProc);
   // pre-fill payment from the selected patient's default convênio
   React.useEffect(() => {
     const p = patient && patient.patientId ? patientById(patient.patientId) : null;
@@ -177,6 +180,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
     return h.entries.filter(e => !g || !g.procs || g.procs.includes(e.proc));
   }, [ctx.proId, ctx.date, ctx.time]);
   const save = () => {
+    if (qSelRet && patient) { onMore({ ...ctx, patient, procIds, time }); return; }
     const e = {};
     if (!patient) e.patient = 'Selecione um paciente';
     if (!tel.trim()) e.tel = 'Telefone é obrigatório para agendar';
@@ -261,9 +265,13 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
             </div>
           </WPopover>
         )}
+        {qOrigins.length > 0 && <RetornoBanner compact origins={qOrigins}
+          onPick={i => onMore({ ...ctx, patient, time, proId: i.o.pro, procIds: [i.retProc], retornoDe: i.o.id })}
+          onConsult={i => onMore({ ...ctx, patient, time, proId: i.o.pro, procIds: [i.o.proc] })} />}
         <WInput label="Telefone" required value={tel} onChange={v => { setTel(v); setErr(s => ({ ...s, tel: undefined })); }} placeholder="(11) 90000-0000" suffixIcon="phone" error={err.tel} size="l" />
         <ProcMultiSelect label="Procedimentos" required value={procIds} onChange={setProcIds} error={err.proc}
           hint={grade && grade.procs ? 'limitado pela grade' : null} options={allowedProcs} />
+        {qSelRet && <span style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: WT.fg2 }}><WIcon name="rotate-ccw" size={13} color={WT.accent} style={{ marginTop: 1 }} />Retorno precisa da consulta de origem. Continuar abre o formulário completo.</span>}
         {needPrepay && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', borderRadius: WT.rM, background: '#fff6ba', border: `1px solid ${err.prepay ? WT.borderDanger : '#e2aa00'}` }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: WT.wHead, color: '#865200' }}>
@@ -298,7 +306,7 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderTop: `1px solid ${WT.borderSub}`, background: WT.inset, flex: 'none' }}>
         <WButton variant="plain" leadingIcon="settings-2" label="Mais opções" onClick={() => onMore({ ...ctx, patient, procIds, time })} />
         <span style={{ flex: 1 }} />
-        <WButton variant="primary" leadingIcon="check" label="Salvar" onClick={save} />
+        <WButton variant="primary" leadingIcon={qSelRet ? 'arrow-right' : 'check'} label={qSelRet ? 'Continuar' : 'Salvar'} onClick={save} />
       </div>
     </WPopover>
   );
@@ -388,6 +396,7 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
       patient: init.patient || null, procIds: init.procIds || (init.procId ? [init.procId] : []), proId: init.proId || PROS[0].id,
       date: init.date || TODAY, time: init.time || '08:00', local: PROS.find(p => p.id === (init.proId || PROS[0].id))?.room || UNITS[0],
       plano: false, convenio: '', tabela: '', valor: '', canal: 'Telefone', notas: '', paciente: {}, equip: init.equip || '', recur: init.recur || null,
+      retornoDe: init.retornoDe || (init.appt && init.appt.retornoDe) || null, retMotivo: (init.appt && init.appt.retMotivo) || '', _editId: init.appt ? init.appt.id : null,
     };
     const sumPrice = f.procIds.reduce((s, id) => s + ((PROCS[id] || {}).price || 0), 0);
     f.valor = f.procIds.length ? String(sumPrice.toFixed(2)) : '';
@@ -405,7 +414,19 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
   React.useEffect(() => { if (reqEquipId && form.equip !== reqEquipId) upd({ equip: reqEquipId }); }, [reqEquipId]);
 
   // when procedures change, auto-recompute the particular value (sum of prices)
-  const setProcs = ids => { const sum = ids.reduce((s, id) => s + ((PROCS[id] || {}).price || 0), 0); upd({ procIds: ids, valor: ids.length ? String(sum.toFixed(2)) : form.valor }); };
+  const priceOf = ids => String(ids.reduce((s, id) => s + ((PROCS[id] || {}).price || 0), 0).toFixed(2));
+  const setProcs = ids => upd({ procIds: ids, valor: ids.length ? priceOf(ids) : form.valor });
+
+  // ---- retorno: origens do paciente na data escolhida ----
+  const retOn = retEnabled();
+  const pidF = form.patient && form.patient.patientId;
+  const origins = retOn && pidF ? retOrigins(pidF, form.date, window.__appts, form._editId) : [];
+  const selRet = retOn && form.procIds.some(isRetProc);
+  const roomOf = proId => (PROS.find(p => p.id === proId) || {}).room;
+  // "Agendar retorno com Dr(a). X": mesmo profissional, procedimento de retorno da origem, origem ligada
+  const pickRet = i => { upd({ retornoDe: i.o.id, retMotivo: '', proId: i.o.pro, local: roomOf(i.o.pro), procIds: [i.retProc], valor: priceOf([i.retProc]) }); setErrors(s => ({ ...s, retorno: undefined, procIds: undefined })); };
+  // período encerrado / falta no retorno: sugere consulta normal do procedimento de origem com o mesmo profissional
+  const pickConsult = i => upd({ retornoDe: null, retMotivo: '', proId: i.o.pro, local: roomOf(i.o.pro), procIds: [i.o.proc], valor: priceOf([i.o.proc]) });
 
   // assemble configurable patient fields to render
   const pacObrig = (config.paciente.obrigar || []);
@@ -436,6 +457,18 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
     if (!form.plano && !form.valor && form.valor !== '0') e.valor = 'Informe o valor';
     if (form.plano && !form.convenio) e.convenio = 'Selecione o convênio';
     if (!form.plano && showTabela && reqTabela && !form.tabela) e.tabela = 'Selecione a tabela particular';
+    // retorno: origem válida na data, profissional igual ou da mesma especialidade; sem origem → motivo obrigatório
+    if (selRet) {
+      const o = form.retornoDe ? (window.__appts || []).find(x => x.id === form.retornoDe) : null;
+      if (!o && !form.retMotivo) e.retorno = 'Escolha a consulta de origem ou informe o motivo';
+      if (o) {
+        const info = retOriginInfo(o, form.date, window.__appts, form._editId);
+        const oPro = PROS.find(p => p.id === o.pro); const nPro = PROS.find(p => p.id === form.proId);
+        if (!info || info.state === 'vencido') e.retorno = info ? `Fora do período de retorno: vale até ${retFmt(info.until)}` : `A data precisa ser depois da consulta de origem (${retFmt(o.date)})`;
+        else if (info.state !== 'valido') e.retorno = 'Esta consulta já tem retorno ligado a ela';
+        else if (oPro && nPro && oPro.id !== nPro.id && !specsOf(nPro).some(s => specsOf(oPro).includes(s))) e.retorno = `O retorno precisa ser com ${oPro.name} ou outro profissional de ${specsOf(oPro).join(', ')}`;
+      }
+    }
     // contact: at least one of Tel1/Cel1/Email1
     const hasContact = CONTACT_FIELDS.some(f => (form.paciente[f] || '').trim());
     if (!hasContact) e._contact = 'Informe ao menos um contato (telefone ou e-mail)';
@@ -471,7 +504,8 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
         {init.linkedFrom && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: WT.fg2 }}><WIcon name="link" size={14} color={WT.accent} />Vinculado ao agendamento de {dateUtil.fmtShortDate(init.linkedFrom.date)} às {init.linkedFrom.start}</div>}
         <fieldset disabled={!!init.readOnly} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, opacity: init.readOnly ? 0.7 : 1 }}>
         <Section icon="user-round" title="Paciente">
-          <IRow icon="user-round" title="Paciente"><div style={{ flex: 1, minWidth: 0 }}><PatientAutocomplete compact locked={!!init.editing} value={form.patient} onSelect={p => upd({ patient: p })} onNew={name => upd({ patient: { patientName: name, isNew: true } })} error={errors.patient} /></div></IRow>
+          <IRow icon="user-round" title="Paciente"><div style={{ flex: 1, minWidth: 0 }}><PatientAutocomplete compact locked={!!init.editing} value={form.patient} onSelect={p => upd({ patient: p, retornoDe: null, retMotivo: '' })} onNew={name => upd({ patient: { patientName: name, isNew: true }, retornoDe: null, retMotivo: '' })} error={errors.patient} /></div></IRow>
+          {!init.editing && origins.length > 0 && <div style={{ paddingLeft: 26 }}><RetornoBanner origins={origins} selectedId={form.retornoDe} onPick={pickRet} onConsult={pickConsult} /></div>}
           {form.patient && form.patient.isNew && (
             <div style={{ fontSize: 12, color: WT.fg2, display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 26 }}><WIcon name="info" size={13} color={WT.accent} />Novo cadastro — preencha os dados exigidos pela clínica.</div>
           )}
@@ -494,6 +528,7 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
             : <IRow icon="door-open" title="Local / sala"><WSelect value={form.local} onChange={v => upd({ local: v })} options={ROOMS.map(r => r.name)} error={errors.local} placeholder="" style={{ flex: 1, minWidth: 0 }} /></IRow>}
           <IRow icon="stethoscope" title="Procedimentos"><div style={{ flex: 1, minWidth: 0 }}><ProcMultiSelect compact required value={form.procIds} onChange={setProcs} error={errors.procIds} options={PROC_LIST} /></div></IRow>
           {form.procIds.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 26 }}><WIcon name="clock" size={12} color={WT.muted} /><span style={{ fontSize: 12, color: WT.muted }}>Duração total {totalDur} min · cor pelo 1º procedimento</span></div>}
+          {selRet && <RetornoOrigemField form={form} upd={patch => { upd(patch); setErrors(s => ({ ...s, retorno: undefined })); }} origins={origins} error={errors.retorno} />}
           {!window.__mvp && !init.editing && <IRow icon="repeat" title="Repetição"><RecurrenceSelect bare date={form.date} value={form.recur} onChange={v => upd({ recur: v })} /></IRow>}
           {init.editing && init.appt && init.appt.series && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: WT.fg2, paddingLeft: 26 }}><WIcon name="repeat" size={14} color={WT.accent} />{rcLabel(init.appt.seriesRule)} · {init.scope === 'all' ? 'editando toda a série' : init.scope === 'following' ? 'editando esta e as seguintes' : 'editando só esta ocorrência'}</div>}
           {window.__ed && window.__ed.equip && ((showEquip || form.equip || reqEquipId)

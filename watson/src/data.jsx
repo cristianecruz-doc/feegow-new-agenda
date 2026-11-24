@@ -89,7 +89,7 @@ const GRADES = [
   { pro: 'p2', days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', slotMin: 60, color: GREEN,      label: '',   room: 'Consultório 2 · Bem-te-vi', procs: ['orto', 'retorno', 'infil'], convenios: ['Particular', 'SulAmérica'] },
   // Dra. Camila — dia todo, convênios limitados; início/fim diferentes a cada dia
   ...[[1, '08:00', '17:00', '12:00', '13:00'], [2, '09:30', '18:30', '13:00', '14:00'], [3, '07:30', '14:00', '12:00', '12:30'], [4, '10:00', '19:00', '13:00', '14:00'], [5, '08:30', '16:00', '12:00', '13:00']].map(([d, ini, fim, li, lf]) => (
-    { pro: 'p3', days: [d], start: ini, end: fim, slotMin: 15, color: '#1a95ad',  label: 'Cardiologia',   procs: ['cardio', 'retorno', 'ecg', 'tele'], convenios: ['Particular', 'Unimed', 'Bradesco Saúde'], intervals: [{ start: li, end: lf, label: 'Almoço' }], doctoralia: true })),
+    { pro: 'p3', days: [d], start: ini, end: fim, slotMin: 15, color: '#1a95ad',  label: 'Cardiologia',   procs: ['cardio', 'retorno', 'retcardio', 'ecg', 'tele'], convenios: ['Particular', 'Unimed', 'Bradesco Saúde'], intervals: [{ start: li, end: lf, label: 'Almoço' }], doctoralia: true })),
   // Dr. Felipe — clínico; início/fim diferentes a cada dia (seg e sex só meio período)
   ...[[1, '07:00', '13:00', null], [2, '08:00', '16:30', ['12:00', '13:00']], [3, '10:00', '19:00', ['13:00', '14:00']], [4, '09:00', '17:30', ['12:30', '13:30']], [5, '07:30', '12:30', null]].map(([d, ini, fim, lunch]) => (
     { pro: 'p4', days: [d], start: ini, end: fim, slotMin: 15, color: GREEN,      label: 'Clínica geral', procs: ['clinico', 'retorno', 'tele'], convenios: ['Particular', 'Amil'], ...(lunch ? { intervals: [{ start: lunch[0], end: lunch[1], label: 'Almoço' }] } : {}) })),
@@ -133,6 +133,7 @@ const PROCS = {
   clinico:{ id: 'clinico',name: 'Consulta Clínico Geral', type: 'consulta',     dur: 30, price: 200, color: '#1a95ad' },
   pedia:  { id: 'pedia',  name: 'Consulta Pediatria',     type: 'consulta',     dur: 30, price: 220, color: '#c76c8f' },
   retorno:{ id: 'retorno',name: 'Retorno',                type: 'retorno',      dur: 15, price: 0,   color: '#1b9a83' },
+  retcardio:{ id: 'retcardio', name: 'Retorno Cardiologia', type: 'retorno',  dur: 20, price: 120, color: '#c9733a' },
   ecg:    { id: 'ecg',    name: 'Eletrocardiograma',      type: 'exame',        dur: 20, price: 120, reqEquip: 'e2', color: '#b17f3a' },
   usg:    { id: 'usg',    name: 'Ultrassonografia',       type: 'exame',        dur: 30, price: 180, reqEquip: 'e1', color: '#9979cf' },
   mapa:   { id: 'mapa',   name: 'Mapeamento de pele',     type: 'procedimento', dur: 45, price: 400, color: '#b17f3a' },
@@ -141,6 +142,29 @@ const PROCS = {
   tele:   { id: 'tele',   name: 'Teleconsulta',           type: 'telemedicina', dur: 20, price: 150, color: '#2591ce' },
 };
 const PROC_LIST = Object.values(PROCS);
+
+// ---- Retorno (follow-up) — regras padrão (RETORNO-FOLLOW-UP-INVENTARIO-…-2026-11-18 §4) ----
+// Por procedimento de ORIGEM: on = oferece retorno · dias = DiasRetorno (0 = usa o padrão da clínica)
+// · ret = procedimento do tipo Retorno a agendar ('' = o padrão da clínica).
+// Por convênio: dias (RetornoConsulta) — quando preenchido, vence o procedimento.
+const RET_RULES_DEFAULT = {
+  procs: {
+    derm:    { on: true,  dias: 30, ret: '' },
+    orto:    { on: true,  dias: 30, ret: '' },
+    cardio:  { on: true,  dias: 60, ret: 'retcardio' },
+    clinico: { on: true,  dias: 15, ret: '' },
+    pedia:   { on: true,  dias: 0,  ret: '' },
+    mapa:    { on: true,  dias: 30, ret: '' },
+    infil:   { on: false, dias: 0,  ret: '' },
+    ecg:     { on: false, dias: 0,  ret: '' },
+    usg:     { on: false, dias: 0,  ret: '' },
+    vacina:  { on: false, dias: 0,  ret: '' },
+    tele:    { on: false, dias: 0,  ret: '' },
+  },
+  convs: { Unimed: 21, Amil: 0, 'Bradesco Saúde': 0, 'SulAmérica': 0 },
+};
+// padrão da clínica (licença): dias e procedimento de retorno
+const RET_PADRAO_DEFAULT = { dias: 30, proc: 'retorno' };
 
 const CONVENIOS = ['Particular', 'Unimed', 'Amil', 'Bradesco Saúde', 'SulAmérica'];
 const UNITS = ['Unidade Centro', 'Unidade Zona Sul'];
@@ -320,7 +344,9 @@ function _apptFromSlot(proId, iso, slot, statusOverride, extraOpts) {
   const opts = { date: iso, dur: step, ...(extraOpts || {}) };
   if (proc.reqEquip) opts.equip = proc.reqEquip;
   const status = statusOverride || _statusFor(iso, s, proc.dur || step, seed);
-  return A(proId, pt, procId, hhmm, status, conv, opts);
+  const a = A(proId, pt, procId, hhmm, status, conv, opts);
+  a._filler = true;   // agendamento de preenchimento: não entra na busca de origens de retorno (deixa o aviso só nos casos montados abaixo)
+  return a;
 }
 const _CANCEL_REASONS = ['Cancelado pelo paciente', 'Cancelado pela clínica', 'Paciente desmarcou', 'Convênio não autorizado'];
 const _RESCHED_REASONS = ['Remarcado a pedido do paciente', 'Remarcado por conflito de agenda', 'Remarcado pela clínica'];
@@ -358,12 +384,25 @@ function _todayFlavor() {
     const seed = _nseed('flav' + pro + start);
     return A(pro, pt, proc, start, _statusFor(TODAY, _hm(start), dur, seed), conv, { date: TODAY, ...opts });
   };
+  // ---- retorno (follow-up): origens Atendidas + retornos ligados (retornoDe = RetornoID) ----
+  const ago = n => { const x = new Date(_TODAY_D); x.setDate(x.getDate() - n); return _isoOf(x); };
+  const link = (r, o) => { r.retornoDe = o.id; return r; };
+  // Pedro (pt5): Cardiologia há 20 dias → retorno hoje com o procedimento "Retorno Cardiologia" (pago)
+  const oPedro = A('p3', 'pt5', 'cardio', '09:00', 'finalizado', 'Particular', { date: ago(20) });
+  // Fernanda (pt8): duas origens válidas (Dermatologia há 12 dias e Ortopedia há 5 dias)
+  const oFer1 = A('p1', 'pt8', 'derm', '10:30', 'finalizado', 'Particular', { date: ago(12) });
+  const oFer2 = A('p2', 'pt8', 'orto', '09:00', 'finalizado', 'Particular', { date: ago(5) });
+  // Ana Beatriz (pt1): Cardiologia pela Unimed há 25 dias → o convênio dá 21 dias (vence os 60 do procedimento) → período encerrado
+  const oAna = A('p3', 'pt1', 'cardio', '08:00', 'finalizado', 'Unimed', { date: ago(25) });
+  // Otávio (pt20): Ortopedia há 10 dias e faltou ao retorno há 3 dias (config "Não liberar novo retorno após falta")
+  const oOta = A('p2', 'pt20', 'orto', '14:00', 'finalizado', 'Particular', { date: ago(10) });
+  const rOta = link(A('p2', 'pt20', 'retorno', '15:00', 'faltou', 'Particular', { date: ago(3) }), oOta);
   // Camila (p3), grade de 15 min: dois agendamentos no mesmo slot das 10:00
   return [
-    mk('p3', 'pt5', 'retorno', '10:00', 'Particular'),
+    oPedro, oFer1, oFer2, oAna, oOta, rOta,
+    link(mk('p3', 'pt5', 'retcardio', '10:00', 'Particular'), oPedro),
     mk('p3', 'pt16', 'retorno', '10:00', 'Amil', { fitIn: true, reason: 'Encaixe — dor aguda' }),
     // casos de apoio às Configurações da Agenda (status fixo p/ serem sempre demonstráveis)
-    A('p2', 'pt20', 'retorno', '15:00', 'marcado', 'Particular', { date: TODAY }),          // retorno de paciente faltoso
     A('p1', 'pt19', 'derm', '09:00', 'marcado', 'Unimed', { date: TODAY }),                  // carteirinha vencida
     A('p4', 'pt3', 'clinico', '11:00', 'marcado', 'Particular', { date: TODAY, paid: true, price: 180 }), // atendimento já pago
   ];
