@@ -439,7 +439,7 @@ function ContextCard({ a, onClose, anchorRect, onCheckin, onReschedule, onCancel
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 12px 0 16px' }}>
           <StatusSelect a={a} />
           <span style={{ flex: 1 }} />
-          {canEdit && <WIconButton name="trash-2" dim={30} onClick={() => onCancel(a)} title="Cancelar agendamento" color={WT.dangerFill} />}
+          {canEdit && <WIconButton name="x-circle" dim={30} onClick={() => onCancel(a)} title="Cancelar ou excluir agendamento" color={WT.dangerFill} />}
           <WIconButton name={canEdit ? 'pencil' : 'eye'} dim={30} onClick={() => onOpen(a)} title={canEdit ? 'Editar agendamento' : 'Ver agendamento (somente leitura)'} />
           <WIconButton name="x" dim={30} onClick={onClose} title="Fechar" />
         </div>

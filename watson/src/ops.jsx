@@ -24,41 +24,97 @@ function CenterModal({ title, icon, iconTone, width = 440, onClose, children, fo
 }
 
 const CANCEL_REASONS = {
-  clinica: ['Profissional indisponível', 'Reagendamento interno', 'Equipamento em manutenção', 'Erro de marcação', 'Outro'],
+  clinica: ['Profissional indisponível', 'Reagendamento interno', 'Equipamento em manutenção', 'Outro'],
   paciente: ['Paciente desmarcou', 'Paciente faltou', 'Imprevisto pessoal', 'Convênio não autorizado', 'Outro'],
 };
+// Exclusão (CON-1854): agendamento que nunca deveria ter existido. Não é cancelamento.
+const DELETE_REASONS = ['Agendamento duplicado', 'Paciente errado', 'Horário ou profissional errado', 'Teste ou treinamento', 'Outro'];
+const DELETE_OK_STATUS = ['marcado', 'confirmado'];
+// por que não dá para excluir (null = pode)
+function deleteBlockedWhy(a) {
+  if (a.paid) return 'Agendamentos pagos não podem ser excluídos. Cancele e faça a devolução.';
+  if (!DELETE_OK_STATUS.includes(a.status)) return `Só é possível excluir agendamentos Marcados ou Confirmados. Este está como “${(STATUS[a.status] || {}).label || a.status}”.`;
+  return null;
+}
 
-function CancelModal({ a, onClose, onConfirm }) {
+function CancelModal({ a, onClose, onConfirm, onDelete }) {
   const pt = patientById(a.pt) || { name: a.pt };
+  const [mode, setMode] = React.useState('cancel'); // cancel | delete
   const [by, setBy] = React.useState('paciente');
   const [reason, setReason] = React.useState('');
+  const [other, setOther] = React.useState('');
   const [err, setErr] = React.useState(false);
-  const confirm = () => { if (!reason) { setErr(true); return; } onConfirm({ by, reason, label: `Cancelado pela ${by === 'clinica' ? 'clínica' : 'paciente'}: ${reason}` }); };
+  const isDel = mode === 'delete';
+  const delWhy = deleteBlockedWhy(a);
+  const switchTo = m => { setMode(m); setReason(''); setOther(''); setErr(false); };
+  const confirm = () => {
+    if (!reason) { setErr(true); return; }
+    if (isDel) {
+      const text = reason === 'Outro' ? other.trim() : reason;
+      if (!text) { setErr(true); return; }
+      onDelete({ reason: text.slice(0, 280) }); return;
+    }
+    onConfirm({ by, reason, label: `Cancelado pela ${by === 'clinica' ? 'clínica' : 'paciente'}: ${reason}` });
+  };
+  const LinkBtn = ({ icon, label, onClick, disabled }) => (
+    <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0, border: 0, background: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, color: disabled ? WT.muted : WT.accent, textDecoration: disabled ? 'none' : 'underline', textUnderlineOffset: 3 }}>
+      {icon && <WIcon name={icon} size={14} color={disabled ? WT.muted : WT.accent} />}{label}
+    </button>
+  );
   return (
-    <CenterModal title="Cancelar agendamento" icon="x-circle" iconTone="danger" onClose={onClose}
-      footer={<><WButton variant="default" label="Voltar" onClick={onClose} /><span style={{ flex: 1 }} /><WButton variant="danger" leadingIcon="x-circle" label="Confirmar cancelamento" onClick={confirm} /></>}>
+    <CenterModal title={isDel ? 'Excluir agendamento' : 'Cancelar agendamento'} icon={isDel ? 'trash-2' : 'x-circle'} iconTone="danger" onClose={onClose}
+      footer={<><WButton variant="default" label="Voltar" onClick={onClose} /><span style={{ flex: 1 }} />
+        {isDel
+          ? <WButton variant="danger" leadingIcon="trash-2" label="Excluir agendamento" onClick={confirm} />
+          : <WButton variant="danger" leadingIcon="x-circle" label="Confirmar cancelamento" onClick={confirm} />}</>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ fontSize: 14, color: WT.fg2 }}><strong style={{ color: WT.fg, fontWeight: WT.wEmph }}>{pt.name}</strong> · {apptProcName(a)} · {a.start}</div>
-        <div>
-          <WLabel>Motivo do cancelamento</WLabel>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            {[['paciente', 'Por paciente', 'user-round'], ['clinica', 'Pela clínica', 'building-2']].map(([v, l, ic]) => (
-              <button key={v} onClick={() => { setBy(v); setReason(''); }} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 40, borderRadius: WT.rM, cursor: 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, border: `1.5px solid ${by === v ? WT.borderAccent : WT.border}`, background: by === v ? WT.accentSoft : '#ffffff', color: by === v ? WT.accent : WT.fg }}>
-                <WIcon name={ic} size={16} color={by === v ? WT.accent : WT.muted} />{l}
-              </button>
-            ))}
+        {!isDel && <>
+          <div>
+            <WLabel>Motivo do cancelamento</WLabel>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              {[['paciente', 'Por paciente', 'user-round'], ['clinica', 'Pela clínica', 'building-2']].map(([v, l, ic]) => (
+                <button key={v} onClick={() => { setBy(v); setReason(''); }} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 40, borderRadius: WT.rM, cursor: 'pointer', fontFamily: WT.font, fontSize: 14, fontWeight: WT.wEmph, border: `1.5px solid ${by === v ? WT.borderAccent : WT.border}`, background: by === v ? WT.accentSoft : '#ffffff', color: by === v ? WT.accent : WT.fg }}>
+                  <WIcon name={ic} size={16} color={by === v ? WT.accent : WT.muted} />{l}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <WSelect label="Justificativa" required value={reason} onChange={v => { setReason(v); setErr(false); }} options={CANCEL_REASONS[by]} error={err ? 'Selecione uma justificativa' : null} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 8px', borderRadius: WT.rM, background: WT.inset, fontSize: 12, color: WT.fg2 }}>
-          <WIcon name="info" size={14} /> O motivo fica registrado no histórico e o horário é liberado.
-        </div>
-        {a.paid && cfgGet('ContasAPagarCancelamento') && (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderRadius: WT.rM, background: '#fff6ba', border: '1px solid #e2aa00', fontSize: 12, color: '#865200', lineHeight: 1.45 }}>
-            <WIcon name="banknote" size={15} color="#865200" style={{ flex: 'none', marginTop: 1 }} />
-            <span>Será criada uma conta a pagar de devolução de <strong style={{ fontWeight: WT.wHead }}>{brl(a.price || 0)}</strong> no financeiro.</span>
+          <WSelect label="Justificativa" required value={reason} onChange={v => { setReason(v); setErr(false); }} options={CANCEL_REASONS[by]} error={err ? 'Selecione uma justificativa' : null} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 8px', borderRadius: WT.rM, background: WT.inset, fontSize: 12, color: WT.fg2 }}>
+            <WIcon name="info" size={14} /> O motivo fica registrado no histórico e o horário é liberado.
           </div>
-        )}
+          {a.paid && cfgGet('ContasAPagarCancelamento') && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderRadius: WT.rM, background: '#fff6ba', border: '1px solid #e2aa00', fontSize: 12, color: '#865200', lineHeight: 1.45 }}>
+              <WIcon name="banknote" size={15} color="#865200" style={{ flex: 'none', marginTop: 1 }} />
+              <span>Será criada uma conta a pagar de devolução de <strong style={{ fontWeight: WT.wHead }}>{brl(a.price || 0)}</strong> no financeiro.</span>
+            </div>
+          )}
+          {onDelete && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 12, borderTop: `1px solid ${WT.borderSub}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: WT.fg2 }}>
+                <span>Foi um engano?</span>
+                <LinkBtn label="Excluir agendamento" onClick={() => switchTo('delete')} disabled={!!delWhy} />
+              </div>
+              {delWhy && <span style={{ fontSize: 12, color: WT.muted, lineHeight: 1.45 }}>{delWhy}</span>}
+            </div>
+          )}
+        </>}
+        {isDel && <>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px', borderRadius: WT.rM, background: WT.dangerSoft, fontSize: 14, color: WT.fg, lineHeight: 1.5 }}>
+            <WIcon name="alert-triangle" size={16} color={WT.danger} style={{ flex: 'none', marginTop: 2 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <strong style={{ fontWeight: WT.wHead }}>Use só para agendamentos que não deveriam existir.</strong>
+              <span style={{ color: WT.fg2 }}>O agendamento some da agenda, da lista de cancelados e dos relatórios. Não conta como cancelamento, o paciente não é avisado e o horário fica livre.</span>
+            </div>
+          </div>
+          <WSelect label="Motivo da exclusão" required value={reason} onChange={v => { setReason(v); setErr(false); }} options={DELETE_REASONS} error={err && !reason ? 'Selecione um motivo' : null} />
+          {reason === 'Outro' && (
+            <WTextarea label="Descreva o motivo" required rows={2} value={other} onChange={v => { setOther(v.slice(0, 280)); setErr(false); }} placeholder="Ex.: marcado na agenda do profissional errado" error={err && !other.trim() ? 'Descreva o motivo' : null} />
+          )}
+          <div style={{ fontSize: 12, color: WT.fg2 }}>Quem excluiu, quando e o motivo ficam registrados.</div>
+          <div><LinkBtn icon="arrow-left" label="Voltar para cancelamento" onClick={() => switchTo('cancel')} /></div>
+        </>}
       </div>
     </CenterModal>
   );
@@ -96,7 +152,7 @@ function BlockModal({ ctx, block, appts, onClose, onConfirm, onDelete, embedded 
   const affected = React.useMemo(() => {
     if (!appts) return [];
     return appts.filter(a => {
-      if (a.status === 'cancelado') return false;
+      if (a.status === 'cancelado' || a.deleted) return false;
       if (!clinica && !(proIds.includes(a.pro) || equipIds.includes(a.equip))) return false;
       if (!blockOnDate({ date, dateEnd: isRange ? dateEnd : null, diasSemana: recurOn ? dias : null }, a.date)) return false;
       const s = toMin(a.start), e = s + a.dur, bs = toMin(sd), be = toMin(ed);
@@ -350,4 +406,4 @@ function BlockChooser({ blocks, onClose, onPick }) {
   );
 }
 
-Object.assign(window, { CenterModal, CancelModal, BlockModal, BlockChooser, WChip, RescheduleModal, WaitingPanel, CANCEL_REASONS });
+Object.assign(window, { CenterModal, CancelModal, DELETE_REASONS, deleteBlockedWhy, BlockModal, BlockChooser, WChip, RescheduleModal, WaitingPanel, CANCEL_REASONS });

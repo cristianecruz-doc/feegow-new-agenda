@@ -181,7 +181,7 @@ function App() {
       if (ids[0] && g.procs && !g.procs.includes(ids[0])) { skipped.push({ date: d, why: 'grade não atende o procedimento' }); return; }
       const blk = blocks.some(b => blockOnDate(b, d) && blockCoversPro(b, proId) && m < toMin(b.end) && m + dur > toMin(b.start));
       if (blk) { skipped.push({ date: d, why: 'bloqueio de agenda' }); return; }
-      const busy = appts.some(a => a.pro === proId && a.date === d && a.status !== 'cancelado' && m < toMin(a.start) + (a.dur || 0) && m + dur > toMin(a.start));
+      const busy = appts.some(a => a.pro === proId && a.date === d && a.status !== 'cancelado' && !a.deleted && m < toMin(a.start) + (a.dur || 0) && m + dur > toMin(a.start));
       if (busy && !payload.fitIn) { skipped.push({ date: d, why: 'horário já ocupado' }); return; }
       ok.push(d);
     });
@@ -225,7 +225,7 @@ function App() {
     const cands = (candidateIds && candidateIds.length) ? candidateIds : PROS.map(p => p.id);
     const m = toMin(time);
     const hasGrade = id => !!gradeAt(id, date, time);
-    const busy = id => appts.some(a => a.pro === id && a.date === date && a.status !== 'cancelado' && m >= toMin(a.start) && m < toMin(a.start) + (a.dur || 0));
+    const busy = id => appts.some(a => a.pro === id && a.date === date && a.status !== 'cancelado' && !a.deleted && m >= toMin(a.start) && m < toMin(a.start) + (a.dur || 0));
     return cands.find(id => hasGrade(id) && !busy(id))   // grade + livre
       || cands.find(id => hasGrade(id))                   // tem grade (mesmo ocupado)
       || cands[0];
@@ -317,6 +317,16 @@ function App() {
       flash(`Agendamento cancelado · conta a pagar de ${brl(a.price || 0)} criada no financeiro`, { tone: 'danger', dur: 4200 });
     } else flash('Agendamento cancelado · horário liberado', { tone: 'danger' });
     if (!mvp) wlOfferFreed(a);
+  }
+  // exclusão (CON-1854): some da agenda e dos relatórios; não é cancelamento, não avisa o paciente
+  function confirmDelete(info) {
+    const a = cancel.a;
+    const ids = new Set(seriesTargets(a, cancel.scope || 'one'));
+    const del = new Set(appts.filter(x => ids.has(x.id) && !x.deleted && !deleteBlockedWhy(x)).map(x => x.id));
+    const n = del.size;
+    setAppts(s => s.map(x => del.has(x.id) ? { ...x, deleted: true, deletedReason: info.reason, deletedAt: new Date().toISOString(), deletedBy: 'Você' } : x));
+    setCancel(null);
+    flash(n > 1 ? `${n} agendamentos da série excluídos · horários liberados` : 'Agendamento excluído · horário liberado', { tone: 'danger' });
   }
   // horário liberado (cancelamento/falta): oferece quem está esperando por essa agenda
   function wlOfferFreed(a) {
@@ -562,7 +572,7 @@ function App() {
       </div>
 
       {/* overlays */}
-      {rcScope && <RecurrenceScopeModal verb={rcScope.verb} a={rcScope.a} danger={rcScope.danger} total={appts.filter(x => x.series === rcScope.a.series && x.status !== 'cancelado').length}
+      {rcScope && <RecurrenceScopeModal verb={rcScope.verb} a={rcScope.a} danger={rcScope.danger} total={appts.filter(x => x.series === rcScope.a.series && x.status !== 'cancelado' && !x.deleted).length}
         onClose={() => setRcScope(null)} onConfirm={sc => { const t = rcScope.then; setRcScope(null); t(sc); }} />}
       {rcPending && <RecurrenceConflictsModal ok={rcPending.ok} skipped={rcPending.skipped} onClose={() => setRcPending(null)}
         onConfirm={() => { const p = rcPending; setRcPending(null); const na = commitSeries(p.payload, p.ok); p.after && na && p.after(na, p.ok.length); }} />}
@@ -572,7 +582,7 @@ function App() {
         onReschedule={doReschedule} onCancel={doCancel} onOpen={openEdit} onRetorno={doRetorno} />}
       {quick && <QuickCreatePopover ctx={quick.ctx} anchorRect={quick.rect} onClose={() => { setQuick(null); setDraft(null); }} onMore={ctx => openBooking(ctx)} onSave={onQuickSave} onDraft={onDraft} />}
       {booking && compact && <BookingHost init={booking.init} config={config} flow={BOOKING_FLOW === 'two-tier' ? 'drawer' : BOOKING_FLOW} compact={compact} perms={PERMS} appts={appts} flash={flash} onCancel={() => { setBooking(null); setDraft(null); }} onSave={onBookingSave} onDraft={onDraft} blockApi={blockApi} />}
-      {cancel && <CancelModal a={cancel.a} onClose={() => setCancel(null)} onConfirm={confirmCancel} />}
+      {cancel && <CancelModal a={cancel.a} onClose={() => setCancel(null)} onConfirm={confirmCancel} onDelete={confirmDelete} />}
       {blockPick && <BlockChooser blocks={blockPick} onClose={() => setBlockPick(null)} onPick={b => { setBlockPick(null); openBooking({ block: b, kind: 'bloqueio', date: b.date, time: b.start, proId: b.pro }); }} />}
       {dropError && <CenterModal
         title={dropError.kind === 'conv' ? 'Convênio não atendido' : 'Serviço não oferecido'}
