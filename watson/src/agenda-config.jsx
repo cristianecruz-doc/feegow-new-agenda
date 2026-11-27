@@ -1,16 +1,20 @@
 /* ============================================================================
    Feegow — New Agenda · "Configurações da Agenda"
-   Consolida as 11 configurações do módulo (hoje espalhadas pelo produto legado)
+   Consolida as configurações do módulo (hoje espalhadas pelo produto legado)
    numa única tela. Cada chave mapeia 1:1 para a chave legada do inventário.
-   MVP: 5 configurações · Final: 11 (as extras marcadas com o selo "Final").
+   As extras da versão Final levam o selo "Final".
+   Saíram da tela porque viraram padrão do produto: a cor do card (cor do tipo
+   de procedimento, sobrescrita pela cor do cadastro do procedimento) e o CPF na
+   busca de pacientes (CFG_FIXED).
+   Campos adicionais do agendamento: a clínica escolhe o que exibir e o que é
+   obrigatório (contrato legado: obrigacampos, Tipo 'Agendamento', Exibir/Obrigar).
    ============================================================================ */
 
 const CFG_DEFAULTS = {
   NaoExibirNaAgendaOsStatus: [],
-  ColorirLinhaAgendamento: false,
   OcultarBotaoRetorno: false,
   validadeconveniovencido: false,
-  CPFBuscaPaciente: false,
+  CamposAdicionaisAgendamento: { exibir: [], obrigar: ['Cel1'] },
   QuantidadeFaltasPagtoPrevio: 0,
   ExibirParentescoPacienteAgendar: false,
   PermitirRemarcarSemGrade: true,
@@ -22,13 +26,16 @@ const CFG_DEFAULTS = {
   RetornoRegras: RET_RULES_DEFAULT,
 };
 // Configurações que existem já no MVP / V0.1; Expansion soma a carteirinha de convênio; as demais só valem na Final
-const CFG_MVP = ['NaoExibirNaAgendaOsStatus', 'ColorirLinhaAgendamento', 'OcultarBotaoRetorno', 'CPFBuscaPaciente', 'PermitirRemarcarSemGrade'];
+const CFG_MVP = ['NaoExibirNaAgendaOsStatus', 'OcultarBotaoRetorno', 'CamposAdicionaisAgendamento', 'PermitirRemarcarSemGrade'];
+// Comportamentos que deixaram de ser configuração e valem para todas as clínicas
+const CFG_FIXED = { CPFBuscaPaciente: true };
 const CFG_EXPANSION = [...CFG_MVP, 'validadeconveniovencido'];
 const cfgAllowed = key => { const ed = window.__ed; if (!ed || ed.final) return true; return (ed.id === 'expansion' ? CFG_EXPANSION : CFG_MVP).includes(key); };
 const CFG_LS = 'feegow.agendaCfg';
 
 // Leitura efetiva: no MVP as configurações exclusivas da Final não têm efeito algum.
 function cfgGet(key) {
+  if (key in CFG_FIXED) return CFG_FIXED[key];
   const d = CFG_DEFAULTS[key];
   if (!cfgAllowed(key)) return d;
   const c = window.__cfg || {};
@@ -41,10 +48,11 @@ function cfgLoad() {
 function cfgSave(c) { try { localStorage.setItem(CFG_LS, JSON.stringify(c)); } catch (e) {} }
 const cfgSame = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-// cor efetiva do agendamento (tipo do procedimento OU cor do procedimento)
+// cor efetiva do agendamento: cada tipo de procedimento tem uma cor básica; a cor que a
+// clínica escolheu no cadastro do procedimento, quando existe, sobrescreve a cor do tipo.
+// Vale sempre: a configuração antiga "colorir pela cor do procedimento" deixou de existir.
 function apptColors(a) {
   const t = TYPES[apptType(a)] || TYPES.consulta;
-  if (!cfgGet('ColorirLinhaAgendamento')) return t;
   const c = (PROCS[a.proc] || {}).color;
   return c ? { ...t, bar: c, tint: c + '2e', fg: c } : t;
 }
@@ -94,7 +102,84 @@ function CfgPreview({ children }) {
   return <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, padding: '8px 8px', borderRadius: WT.rM, background: WT.inset, border: `1px solid ${WT.borderSub}`, width: 'fit-content' }}>{children}</div>;
 }
 
-// ---- as 11 configurações ----------------------------------------------------
+// ---- campos adicionais do agendamento ----------------------------------------
+// Catálogo fixo (o mesmo do legado, sem a matrícula, que já vem com o convênio).
+const CAMPOS_BASE = ['Cel1', 'Email1']; // já fazem parte do formulário padrão: sempre aparecem
+const CAMPOS_CATALOGO = [
+  { group: 'Identificação do paciente', keys: ['CPF', 'Nascimento', 'Sexo', 'NomeSocial', 'Documento', 'Profissao'] },
+  { group: 'Contato', keys: ['Cel1', 'Tel1', 'Email1'] },
+  { group: 'Origem e indicação', keys: ['Origem', 'IndicadoPor', 'IndicadoPorSelecao'] },
+  { group: 'Atendimento', keys: ['Prioridade', 'Pendencias', 'Tabela'] },
+];
+const CAMPOS_ORDEM = CAMPOS_CATALOGO.flatMap(g => g.keys);
+const CAMPOS_HINT = {
+  IndicadoPorSelecao: 'Profissional da clínica ou externo que pediu o atendimento. Fica salvo no agendamento.',
+  Tabela: 'Aparece em Pagamento, só em agendamento particular.',
+};
+const camposSort = list => CAMPOS_ORDEM.filter(k => (list || []).includes(k));
+// obrigatório implica exibido; os campos do formulário padrão não entram na lista "exibir"
+function camposNorm(v) {
+  const obrigar = camposSort((v || {}).obrigar);
+  const exibir = camposSort([...((v || {}).exibir || []), ...obrigar]).filter(k => !CAMPOS_BASE.includes(k));
+  return { exibir, obrigar };
+}
+const camposShown = c => camposSort([...CAMPOS_BASE, ...c.exibir, ...c.obrigar]);
+// leitura efetiva para o formulário de agendamento
+function camposCfg() { const c = camposNorm(cfgGet('CamposAdicionaisAgendamento')); return { exibir: camposShown(c), obrigar: c.obrigar }; }
+
+function CfgCamposAdicionais({ value, onChange }) {
+  const c = camposNorm(value);
+  const isShown = k => CAMPOS_BASE.includes(k) || c.exibir.includes(k);
+  const setShown = (k, on) => onChange(camposNorm({ exibir: on ? [...c.exibir, k] : c.exibir.filter(x => x !== k), obrigar: on ? c.obrigar : c.obrigar.filter(x => x !== k) }));
+  const setReq = (k, on) => onChange(camposNorm({ exibir: c.exibir, obrigar: on ? [...c.obrigar, k] : c.obrigar.filter(x => x !== k) }));
+  const cols = 'minmax(0,1fr) 88px 112px';
+  const head = { fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 };
+  const shown = camposShown(c);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+      <div style={{ border: `1px solid ${WT.border}`, borderRadius: WT.rM, overflow: 'hidden', background: '#ffffff' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, alignItems: 'center', gap: 12, padding: '8px 16px', background: WT.inset, borderBottom: `1px solid ${WT.border}` }}>
+          <span style={head}>Campo</span><span style={head}>Exibir</span><span style={head}>Obrigatório</span>
+        </div>
+        {CAMPOS_CATALOGO.map(g => (
+          <div key={g.group}>
+            <div style={{ padding: '8px 16px 4px', fontSize: 12, fontWeight: WT.wHead, color: WT.muted, borderTop: `1px solid ${WT.borderSub}` }}>{g.group}</div>
+            {g.keys.map(k => {
+              const base = CAMPOS_BASE.includes(k); const on = isShown(k); const req = c.obrigar.includes(k);
+              return (
+                <div key={k} data-campo={k} style={{ display: 'grid', gridTemplateColumns: cols, alignItems: 'center', gap: 12, minHeight: 40, padding: '4px 16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    <span style={{ fontSize: 14, color: WT.fg, fontWeight: on ? WT.wEmph : WT.wBody }}>{PATIENT_FIELDS[k] || k}</span>
+                    {CAMPOS_HINT[k] && <span style={{ fontSize: 12, color: WT.muted, lineHeight: 1.4 }}>{CAMPOS_HINT[k]}</span>}
+                  </div>
+                  {base
+                    ? <span style={{ fontSize: 12, color: WT.muted }} title="Faz parte do formulário padrão">Sempre</span>
+                    : <WToggle checked={on} onChange={v => setShown(k, v)} />}
+                  <WCheckbox checked={req} disabled={!on} onChange={v => setReq(k, v)} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: WT.rM, background: WT.inset, border: `1px solid ${WT.borderSub}` }}>
+        <span style={{ fontSize: 12, color: WT.muted }}>No agendamento:</span>
+        {shown.map(k => (
+          <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 8px', borderRadius: WT.pill, background: '#ffffff', border: `1px solid ${WT.border}`, fontSize: 12, color: WT.fg2, whiteSpace: 'nowrap' }}>
+            {PATIENT_FIELDS[k] || k}{c.obrigar.includes(k) && <span style={{ color: WT.danger, fontWeight: WT.wHead }}>*</span>}
+          </span>
+        ))}
+        <span style={{ fontSize: 12, color: WT.muted }}><span style={{ color: WT.danger, fontWeight: WT.wHead }}>*</span> obrigatório</span>
+      </div>
+      <span style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: WT.fg2, lineHeight: 1.45 }}>
+        <WIcon name="info" size={13} color={WT.accent} style={{ marginTop: 2, flex: 'none' }} />
+        <span>O que a recepção preenche é salvo na ficha do paciente. Dado que o paciente já tem no cadastro vem preenchido.{window.__ed && window.__ed.conv ? ' A matrícula da carteirinha já é pedida em todo agendamento por convênio.' : ''}</span>
+      </span>
+    </div>
+  );
+}
+
+// ---- as configurações ----------------------------------------------------
 const CFG_SECTIONS = [
   { id: 's1', n: 1, icon: 'calendar-days', title: 'Visualização da agenda', desc: 'O que aparece na grade e como cada agendamento é desenhado.' },
   { id: 's2', n: 2, icon: 'calendar-plus', title: 'Marcação de agendamento', desc: 'Regras aplicadas no momento de agendar.' },
@@ -109,16 +194,6 @@ function cfgSettings() {
       desc: 'Os agendamentos remarcados e/ou cancelados deixam de aparecer nas visões da agenda. Os demais status fazem parte do fluxo de atendimento e sempre aparecem.',
       control: (v, set) => <CfgStatusChips value={v} onChange={set} />,
       preview: v => (v || []).length ? <CfgPreview><PrevCard color="#1b5ea9" label="Marcado" /><PrevCard ghost label={`${v.length} status oculto${v.length > 1 ? 's' : ''}`} /></CfgPreview> : null,
-    },
-    {
-      sec: 's1', key: 'ColorirLinhaAgendamento', title: 'Colorir agendamentos pela cor do procedimento',
-      desc: 'Cada agendamento usa a cor do procedimento, para identificar o tipo de atendimento num relance.',
-      control: (v, set) => <WToggle checked={!!v} onChange={set} />,
-      preview: v => <CfgPreview>
-        <PrevCard color={v ? (PROCS.derm.color) : TYPES.consulta.bar} label="Dermatologia" />
-        <PrevCard color={v ? (PROCS.cardio.color) : TYPES.consulta.bar} label="Cardiologia" />
-        <PrevCard color={v ? (PROCS.vacina.color) : TYPES.procedimento.bar} label="Vacinação" />
-      </CfgPreview>,
     },
     {
       sec: 's4', key: 'OcultarBotaoRetorno', title: 'Usar controle de retorno',
@@ -147,13 +222,11 @@ function cfgSettings() {
       control: (v, set) => <WToggle checked={!!v} onChange={set} />,
     },
     {
-      sec: 's2', key: 'CPFBuscaPaciente', title: 'Mostrar CPF na busca de pacientes',
-      desc: 'Exibe o CPF nos resultados da busca, para não confundir pacientes com nomes parecidos.',
-      control: (v, set) => <WToggle checked={!!v} onChange={set} />,
-      preview: v => <CfgPreview>
-        <span style={{ fontSize: 12, color: WT.fg2, fontWeight: WT.wEmph }}>Maria Silva Santos</span>
-        {v ? <span style={{ fontSize: 12, color: WT.muted, fontVariantNumeric: 'tabular-nums' }}>CPF 342.118.907-55</span> : <span style={{ fontSize: 12, color: WT.placeholder }}>sem CPF</span>}
-      </CfgPreview>,
+      sec: 's2', key: 'CamposAdicionaisAgendamento', title: 'Campos adicionais do agendamento',
+      desc: 'Escolha quais dados a recepção vê ao agendar, além do formulário padrão, e quais deles são obrigatórios. Sem um campo obrigatório preenchido, o agendamento não é salvo.',
+      keywords: CAMPOS_ORDEM.map(k => PATIENT_FIELDS[k]).join(' '),
+      control: v => { const c = camposNorm(v); const n = camposShown(c).length; return <span style={{ fontSize: 12, color: WT.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{n} exibido{n === 1 ? '' : 's'} · {c.obrigar.length} obrigatório{c.obrigar.length === 1 ? '' : 's'}</span>; },
+      extra: (cfg, setCfg) => <CfgCamposAdicionais value={cfg.CamposAdicionaisAgendamento} onChange={v => setCfg({ CamposAdicionaisAgendamento: v })} />,
     },
     {
       sec: 's2', key: 'QuantidadeFaltasPagtoPrevio', final: true, title: 'Exigir pagamento antecipado após faltas',
@@ -232,7 +305,8 @@ function AgendaConfigPage({ cfg, setCfg, resetSection, onBack, onSimulateDayEnd 
   const [q, setQ] = React.useState('');
   const ql = q.trim().toLowerCase();
   const all = cfgSettings().filter(s => cfgAllowed(s.key));
-  const match = s => !ql || (s.title + ' ' + s.desc).toLowerCase().includes(ql);
+  const match = s => !ql || (s.title + ' ' + s.desc + ' ' + (s.keywords || '')).toLowerCase().includes(ql);
+  const nFinal = all.filter(s => s.final).length;
   const api = { onSimulateDayEnd };
 
   return (
@@ -252,7 +326,7 @@ function AgendaConfigPage({ cfg, setCfg, resetSection, onBack, onSimulateDayEnd 
             <WInput value={q} onChange={setQ} placeholder="Buscar configuração…" prefixIcon="search" size="l" />
           </div>
           <span style={{ fontSize: 12, color: WT.muted }}>
-            {window.__ed && window.__ed.id === 'mvp' ? '5 configurações nesta versão (MVP · V0.1)' : window.__ed && window.__ed.id === 'expansion' ? '6 configurações nesta versão (Expansion · V0.2)' : '13 configurações · 8 chegam na versão Final'}
+            {window.__ed && window.__ed.id === 'mvp' ? `${all.length} configurações nesta versão (MVP · V0.1)` : window.__ed && window.__ed.id === 'expansion' ? `${all.length} configurações nesta versão (Expansion · V0.2)` : `${all.length} configurações · ${nFinal} chegam na versão Final`}
           </span>
         </div>
 
@@ -299,5 +373,5 @@ function AgendaConfigPage({ cfg, setCfg, resetSection, onBack, onSimulateDayEnd 
 
 Object.assign(window, {
   CFG_DEFAULTS, CFG_MVP, CFG_HIDEABLE_STATUS, cfgGet, cfgLoad, cfgSave, cfgSame, apptColors, cfgHiddenStatuses,
-  CfgStatusChips, CfgStepper, AgendaConfigPage,
+  CfgStatusChips, CfgStepper, AgendaConfigPage, CAMPOS_BASE, CAMPOS_ORDEM, camposCfg,
 });

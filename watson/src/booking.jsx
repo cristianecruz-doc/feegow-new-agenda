@@ -145,8 +145,13 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
   const [parentesco, setParentesco] = React.useState('Próprio paciente');
   const [prepaid, setPrepaid] = React.useState(false);
   const [err, setErr] = React.useState({});
+  const [extra, setExtra] = React.useState({}); // campos adicionais obrigatórios preenchidos aqui
   // regras vindas das Configurações da Agenda
   const ptRec = patient && patient.patientId ? patientById(patient.patientId) : null;
+  // campos adicionais: aqui só os obrigatórios que o cadastro do paciente ainda não tem; os opcionais ficam em Mais opções
+  const campos = camposCfg();
+  const telReq = campos.obrigar.includes('Cel1');
+  const reqExtra = patient ? campos.obrigar.filter(f => f !== 'Cel1' && PATIENT_FIELDS[f] && !patientKnown(ptRec, f) && (f !== 'Tabela' || pay === 'particular')) : [];
   const cardExpired = !!(ptRec && ptRec.cardExp) && pay === 'convenio';
   const requireValidCard = cfgGet('validadeconveniovencido');
   const faltasTh = cfgGet('QuantidadeFaltasPagtoPrevio');
@@ -183,7 +188,8 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
     if (qSelRet && patient) { onMore({ ...ctx, patient, procIds, time }); return; }
     const e = {};
     if (!patient) e.patient = 'Selecione um paciente';
-    if (!tel.trim()) e.tel = 'Telefone é obrigatório para agendar';
+    if (telReq && !tel.trim()) e.tel = 'Celular é obrigatório para agendar';
+    reqExtra.forEach(f => { if (!(extra[f] || '').toString().trim()) e['pac_' + f] = 'Obrigatório'; });
     if (!procIds.length) e.proc = 'Selecione ao menos um procedimento';
     if (pay === 'convenio' && !conv) e.conv = 'Selecione o convênio';
     if (pay === 'convenio' && conv && grade && grade.convenios && !grade.convenios.includes(conv)) e.conv = 'Convênio não atendido nesta grade';
@@ -268,7 +274,11 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
         {qOrigins.length > 0 && <RetornoBanner compact origins={qOrigins}
           onPick={i => onMore({ ...ctx, patient, time, proId: i.o.pro, procIds: [i.retProc], retornoDe: i.o.id })}
           onConsult={i => onMore({ ...ctx, patient, time, proId: i.o.pro, procIds: [i.o.proc] })} />}
-        <WInput label="Telefone" required value={tel} onChange={v => { setTel(v); setErr(s => ({ ...s, tel: undefined })); }} placeholder="(11) 90000-0000" suffixIcon="phone" error={err.tel} size="l" />
+        <WInput label="Celular" required={telReq} value={tel} onChange={v => { setTel(v); setErr(s => ({ ...s, tel: undefined })); }} placeholder="(11) 90000-0000" suffixIcon="phone" error={err.tel} size="l" />
+        {reqExtra.map(f => (
+          <PatientField key={f} name={f} size="l" required value={extra[f]} error={err['pac_' + f]}
+            onChange={v => { setExtra(s => ({ ...s, [f]: v })); setErr(s => ({ ...s, ['pac_' + f]: undefined })); }} />
+        ))}
         <ProcMultiSelect label="Procedimentos" required value={procIds} onChange={setProcIds} error={err.proc}
           hint={grade && grade.procs ? 'limitado pela grade' : null} options={allowedProcs} />
         {qSelRet && <span style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: WT.fg2 }}><WIcon name="rotate-ccw" size={13} color={WT.accent} style={{ marginTop: 1 }} />Retorno precisa da consulta de origem. Continuar abre o formulário completo.</span>}
@@ -313,15 +323,26 @@ function QuickCreatePopover({ ctx, anchorRect, onClose, onMore, onSave, onDraft 
 }
 
 // ---- Configurable patient field -------------------------------------------
-function PatientField({ name, value, onChange, required, error }) {
+function PatientField({ name, value, onChange, required, error, size }) {
   const label = PATIENT_FIELDS[name] || name;
-  if (name === 'Nascimento') return <WInput label={label} required={required} type="date" value={value || ''} onChange={onChange} error={error} />;
-  if (name === 'Sexo') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={SEXO_OPTS} error={error} />;
-  if (name === 'Origem') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={ORIGEM_OPTS} error={error} />;
-  if (name === 'Tabela') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={TABELA_OPTS} error={error} />;
-  if (name === 'IndicadoPorSelecao') return <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={PROS.map(p => p.name)} error={error} />;
+  const sel = options => <WSelect label={label} required={required} value={value || ''} onChange={onChange} options={options} error={error} size={size} />;
+  if (name === 'Nascimento') return <WInput label={label} required={required} type="date" value={value || ''} onChange={onChange} error={error} size={size} />;
+  if (name === 'Sexo') return sel(SEXO_OPTS);
+  if (name === 'Origem') return sel(ORIGEM_OPTS);
+  if (name === 'Tabela') return sel(TABELA_OPTS);
+  if (name === 'Prioridade') return sel(Object.values(PRIORITIES).map(p => p.label));
+  if (name === 'IndicadoPorSelecao') return sel(PROS.map(p => p.name));
   const ph = name === 'Email1' ? 'nome@email.com' : name === 'CPF' ? '000.000.000-00' : (name === 'Cel1' || name === 'Tel1') ? '(11) 90000-0000' : '';
-  return <WInput label={label} required={required} value={value || ''} onChange={onChange} error={error} placeholder={ph} />;
+  return <WInput label={label} required={required} value={value || ''} onChange={onChange} error={error} placeholder={ph} size={size} />;
+}
+// dado que o paciente já tem no cadastro (vem preenchido no agendamento)
+function patientKnown(p, f) {
+  if (!p) return '';
+  if (f === 'Cel1') return p.phone || '';
+  if (f === 'Nascimento') return p.birth || '';
+  if (f === 'CPF') return cpfOf(p);
+  if (f === 'Prioridade') return (p.priority && PRIORITIES[p.priority]) ? PRIORITIES[p.priority].label : '';
+  return '';
 }
 
 // stable section header (module scope so the form subtree never remounts)
@@ -431,10 +452,13 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
   // assemble configurable patient fields to render
   const pacObrig = (config.paciente.obrigar || []);
   const pacExib = (config.paciente.exibir || []);
-  const agObrig = (config.agendamento.obrigar || []);
-  const agExib = (config.agendamento.exibir || []);
-  const patientFieldsToRender = Array.from(new Set(['Cel1', 'Email1', ...pacObrig, ...pacExib, ...agObrig, ...agExib]
-    .filter(f => PATIENT_FIELDS[f])));
+  // campos adicionais do agendamento: vêm de Configurações da Agenda
+  const campos = camposCfg();
+  const agObrig = campos.obrigar;
+  const agExib = campos.exibir;
+  // Tabela particular é desenhada em Pagamento, não entre os dados do paciente
+  const allFields = Array.from(new Set([...pacObrig, ...pacExib, ...agObrig, ...agExib])).filter(f => PATIENT_FIELDS[f] && f !== 'Tabela');
+  const patientFieldsToRender = [...CAMPOS_ORDEM.filter(f => allFields.includes(f)), ...allFields.filter(f => !CAMPOS_ORDEM.includes(f))];
   const requiredSet = new Set([...pacObrig, ...agObrig]);
   const showTabela = requiredSet.has('Tabela') || pacExib.includes('Tabela') || agExib.includes('Tabela');
   const reqTabela = requiredSet.has('Tabela');
@@ -443,7 +467,7 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
   React.useEffect(() => {
     if (form.patient && form.patient.patientId) {
       const p = patientById(form.patient.patientId) || {};
-      setForm(s => ({ ...s, paciente: { ...s.paciente, Nascimento: s.paciente.Nascimento || p.birth, Cel1: s.paciente.Cel1 || p.phone } }));
+      setForm(s => ({ ...s, paciente: { ...s.paciente, Nascimento: s.paciente.Nascimento || p.birth, Cel1: s.paciente.Cel1 || p.phone, CPF: s.paciente.CPF || patientKnown(p, 'CPF'), Prioridade: s.paciente.Prioridade || patientKnown(p, 'Prioridade') } }));
     }
   }, [form.patient && form.patient.patientId]);
 
@@ -473,7 +497,7 @@ function BookingForm({ init, config, perms, onCancel, onSave, onDraft, onPatient
     const hasContact = CONTACT_FIELDS.some(f => (form.paciente[f] || '').trim());
     if (!hasContact) e._contact = 'Informe ao menos um contato (telefone ou e-mail)';
     // configured required patient fields
-    requiredSet.forEach(f => { if (PATIENT_FIELDS[f] && !(form.paciente[f] || '').toString().trim()) e['pac_' + f] = 'Obrigatório'; });
+    requiredSet.forEach(f => { if (PATIENT_FIELDS[f] && f !== 'Tabela' && !(form.paciente[f] || '').toString().trim()) e['pac_' + f] = 'Obrigatório'; });
     return e;
   }
 

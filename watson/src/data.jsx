@@ -125,21 +125,21 @@ function gradeAccepts(g, { procId, conv } = {}) {
 function dayAcceptsCond(proId, iso, cond) { return gradesFor(proId, iso).some(g => gradeAccepts(g, cond)); }
 
 // ---- Procedures (drive duration, type color, base price) --------------------
-// color = cor própria do procedimento (usada quando "Colorir agendamentos pela cor do procedimento" está ativo)
+// color = cor escolhida pela clínica no cadastro do procedimento (opcional); sem ela, o card usa a cor do tipo
 const PROCS = {
-  derm:   { id: 'derm',   name: 'Consulta Dermatologia',  type: 'consulta',     dur: 30, price: 250, color: '#2591ce' },
+  derm:   { id: 'derm',   name: 'Consulta Dermatologia',  type: 'consulta',     dur: 30, price: 250 },
   orto:   { id: 'orto',   name: 'Consulta Ortopedia',     type: 'consulta',     dur: 30, price: 280, color: '#9979cf' },
   cardio: { id: 'cardio', name: 'Consulta Cardiologia',   type: 'consulta',     dur: 40, price: 350, color: '#c9733a' },
-  clinico:{ id: 'clinico',name: 'Consulta Clínico Geral', type: 'consulta',     dur: 30, price: 200, color: '#1a95ad' },
-  pedia:  { id: 'pedia',  name: 'Consulta Pediatria',     type: 'consulta',     dur: 30, price: 220, color: '#c76c8f' },
-  retorno:{ id: 'retorno',name: 'Retorno',                type: 'retorno',      dur: 15, price: 0,   color: '#1b9a83' },
+  clinico:{ id: 'clinico',name: 'Consulta Clínico Geral', type: 'consulta',     dur: 30, price: 200 },
+  pedia:  { id: 'pedia',  name: 'Consulta Pediatria',     type: 'consulta',     dur: 30, price: 220 },
+  retorno:{ id: 'retorno',name: 'Retorno',                type: 'retorno',      dur: 15, price: 0 },
   retcardio:{ id: 'retcardio', name: 'Retorno Cardiologia', type: 'retorno',  dur: 20, price: 120, color: '#c9733a' },
-  ecg:    { id: 'ecg',    name: 'Eletrocardiograma',      type: 'exame',        dur: 20, price: 120, reqEquip: 'e2', color: '#b17f3a' },
-  usg:    { id: 'usg',    name: 'Ultrassonografia',       type: 'exame',        dur: 30, price: 180, reqEquip: 'e1', color: '#9979cf' },
+  ecg:    { id: 'ecg',    name: 'Eletrocardiograma',      type: 'exame',        dur: 20, price: 120, reqEquip: 'e2' },
+  usg:    { id: 'usg',    name: 'Ultrassonografia',       type: 'exame',        dur: 30, price: 180, reqEquip: 'e1' },
   mapa:   { id: 'mapa',   name: 'Mapeamento de pele',     type: 'procedimento', dur: 45, price: 400, color: '#b17f3a' },
-  infil:  { id: 'infil',  name: 'Infiltração',            type: 'procedimento', dur: 30, price: 350, color: '#1b9a83' },
-  vacina: { id: 'vacina', name: 'Vacinação',              type: 'procedimento', dur: 15, price: 90,  color: '#b17f3a' },
-  tele:   { id: 'tele',   name: 'Teleconsulta',           type: 'telemedicina', dur: 20, price: 150, color: '#2591ce' },
+  infil:  { id: 'infil',  name: 'Infiltração',            type: 'procedimento', dur: 30, price: 350 },
+  vacina: { id: 'vacina', name: 'Vacinação',              type: 'procedimento', dur: 15, price: 90 },
+  tele:   { id: 'tele',   name: 'Teleconsulta',           type: 'telemedicina', dur: 20, price: 150 },
 };
 const PROC_LIST = Object.values(PROCS);
 
@@ -425,8 +425,8 @@ function apptProcLabel(a) {
 const PATIENT_FIELDS = {
   Nascimento: 'Data de nascimento', Sexo: 'Sexo', Profissao: 'Profissão', Documento: 'Documento (RG)',
   Origem: 'Origem (como chegou)', Email1: 'E-mail', CPF: 'CPF', Pendencias: 'Pendências',
-  IndicadoPor: 'Indicado por', IndicadoPorSelecao: 'Indicado por (profissional)', Matricula1: 'Matrícula / carteirinha',
-  NomeSocial: 'Nome social', Cel1: 'Celular', Tel1: 'Telefone fixo', Tabela: 'Tabela particular',
+  IndicadoPor: 'Indicado por', IndicadoPorSelecao: 'Profissional solicitante', Matricula1: 'Matrícula / carteirinha',
+  NomeSocial: 'Nome social', Cel1: 'Celular', Tel1: 'Telefone fixo', Tabela: 'Tabela particular', Prioridade: 'Prioridade',
 };
 
 const CLINIC_CONFIGS = {
