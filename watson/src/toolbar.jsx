@@ -275,21 +275,14 @@ function Toolbar({ state, set, onNew, compact, cancelled = [], onOpenAppt }) {
         <WPopover anchorRect={pop.rect} onClose={close} width={264} placement="below">
           <div style={{ padding: '12px 16px 4px', fontSize: 14, fontWeight: WT.wHead, color: WT.fg }}>Configurações de visualização</div>
           <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Indicação de cor do profissional</span>
-              <WSegmented value={state.cardStyle} onChange={v => set({ cardStyle: v })}
-                options={[{ value: 'typebar', label: 'Barra' }, { value: 'filled', label: 'Preenchido' }]} />
-            </div>
-            <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Altura da hora</span>
-              <WSegmented value={state.density || 'auto'} onChange={v => set({ density: v })}
-                options={[{ value: 'auto', label: 'Auto' }, { value: 'compact', label: 'Compacta' }, { value: 'normal', label: 'Média' }, { value: 'comfortable', label: 'Alta' }]} />
-              <span style={{ fontSize: 12, color: WT.muted }}>Auto ajusta a densidade à altura da tela. O zoom da barra superior refina em cima disso.</span>
-            </div>
-            <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Sinalizadores no card</span>
               <WToggle checked={state.showPriorityFlags !== false} onChange={v => set({ showPriorityFlags: v })} label="Exibir ícones de prioridade" />
               <WToggle checked={state.showNewPatientFlag !== false} onChange={v => set({ showNewPatientFlag: v })} label="Exibir ícone de novo paciente" />
+            </div>
+            <div style={{ borderTop: `1px solid ${WT.borderSub}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: WT.wEmph, color: WT.fg2 }}>Agendamentos</span>
+              <WToggle checked={!!state.showCancelled} onChange={v => set({ showCancelled: v })} label="Exibir cancelados na agenda" />
             </div>
           </div>
         </WPopover>

@@ -79,6 +79,8 @@ function App() {
     cardStyle: 'filled', density: 'compact', zoom: 1,
     // Sinalizadores exibidos nos cards
     showPriorityFlags: false, showNewPatientFlag: false,
+    // Cancelados na grade (desligado: ficam só no pill "Cancelados" da barra)
+    showCancelled: false,
     // Página ativa do módulo ('agenda' | 'agenda-options')
     page: 'agenda',
   });
@@ -129,8 +131,9 @@ function App() {
     const st = STATUS[status] || {};
     flash(`Status: ${st.label || status}`, { action: { label: 'Desfazer', onClick: () => { setAppts(s => s.map(x => x.id === a.id ? { ...x, status: prev } : x)); setToast(null); } } });
   };
-  // cancelados saem da grade e vivem no pill "Cancelados" da barra (abre a lista + agendamento completo)
-  const filtered = filterAppts(appts, app.filters).filter(a => !cfgHiddenStatuses().includes(a.status) && a.status !== 'cancelado');
+  // cancelados vivem no pill "Cancelados" da barra (abre a lista + agendamento completo);
+  // só entram na grade com "Exibir cancelados na agenda" ligado nas configurações de visualização
+  const filtered = filterAppts(appts, app.filters).filter(a => !cfgHiddenStatuses().includes(a.status) && (app.showCancelled || a.status !== 'cancelado'));
   const cancelledDay = React.useMemo(() => {
     const inWeek = app.view === 'semana' ? new Set(dateUtil.weekDaysOf(app.date, app.weekHideWeekend ? 5 : 6)) : null;
     return filterAppts(appts, app.filters).filter(a => a.status === 'cancelado' && !a.deleted && (inWeek ? inWeek.has(a.date) : a.date === app.date)).sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
